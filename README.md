@@ -1,4 +1,4 @@
-# Antigravity Feed — Portfolio-Centric Market Intelligence App
+# Portfolio Feed — Portfolio-Centric Market Intelligence App
 
 A premium, modern, portfolio-centric market intelligence web application. The application connects directly to **Supabase** (Auth, Database, Edge Functions) to securely parse portfolio exports, aggregate financial news feeds, and match articles against your stock holdings in real-time.
 

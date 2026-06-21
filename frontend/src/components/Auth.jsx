@@ -28,7 +28,7 @@ export default function Auth() {
   return (
     <div className="auth-screen">
       <div className="auth-card">
-        <div className="auth-logo">Antigravity</div>
+        <div className="auth-logo">Portfolio Feed</div>
         <div className="auth-subtitle">
           Portfolio-centric market intelligence. Load your holdings to fetch a customized news feed.
         </div>

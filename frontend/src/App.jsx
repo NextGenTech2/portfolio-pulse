@@ -218,7 +218,7 @@ export default function App() {
           <div className="header-logo-icon">
             <Newspaper size={16} />
           </div>
-          <span className="brand-title">Antigravity Feed</span>
+          <span className="brand-title">Portfolio Feed</span>
         </div>
         <button onClick={logout} className="btn-signout" title="Sign Out">
           <LogOut size={13} />
@@ -467,7 +467,7 @@ export default function App() {
 
             <button onClick={logout} className="btn-logout-large">
               <LogOut size={16} />
-              <span>Sign Out of Antigravity Feed</span>
+              <span>Sign Out of Portfolio Feed</span>
             </button>
           </div>
         )}
