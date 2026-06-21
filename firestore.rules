@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // User Profiles
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // News Cache (Only readable by logged-in users, no public write access)
+    match /news_cache/{articleId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only Cloud Functions using Admin SDK can write
+    }
+  }
+}
