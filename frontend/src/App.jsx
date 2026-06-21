@@ -15,7 +15,9 @@ import {
   Grid,
   Bookmark,
   ExternalLink,
-  Trash2
+  Trash2,
+  Sun,
+  Moon
 } from "lucide-react";
 
 export default function App() {
@@ -26,6 +28,19 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("home"); // home, market, portfolio, profile
   const [searchTerm, setSearchTerm] = useState("");
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem("portfolio-theme") || "dark";
+  });
+
+  // Apply the selected theme to the root element
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("portfolio-theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === "dark" ? "light" : "dark");
+  };
 
   // Listen to Authentication state changes in Supabase
   useEffect(() => {
@@ -220,10 +235,20 @@ export default function App() {
           </div>
           <span className="brand-title">Portfolio Feed</span>
         </div>
-        <button onClick={logout} className="btn-signout" title="Sign Out">
-          <LogOut size={13} />
-          <span>Sign Out</span>
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <button 
+            onClick={toggleTheme} 
+            className="btn-signout" 
+            title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            style={{ padding: "0.4rem" }}
+          >
+            {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+          </button>
+          <button onClick={logout} className="btn-signout" title="Sign Out">
+            <LogOut size={13} />
+            <span>Sign Out</span>
+          </button>
+        </div>
       </header>
 
       {/* Main Content Area */}

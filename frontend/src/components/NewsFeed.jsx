@@ -393,8 +393,16 @@ export default function NewsFeed({
                 className="news-card regular"
               >
                 <div className="regular-card-inner">
-                  <div className="regular-card-media">
-                    {renderFallbackIllustration(article.headline, article.summary)}
+                  <div className="regular-card-left">
+                    <div className="regular-card-media">
+                      {renderFallbackIllustration(article.headline, article.summary)}
+                    </div>
+                    <div className="source-info-left">
+                      {getSourceIcon(article.source)}
+                      <span className="source-name-left" title={article.source}>
+                        {article.source}
+                      </span>
+                    </div>
                   </div>
                   <div className="regular-card-content">
                     <h3 className="news-headline">{article.headline}</h3>
@@ -403,12 +411,7 @@ export default function NewsFeed({
                     )}
                     
                     <div className="card-footer-custom">
-                      <div className="source-info">
-                        {getSourceIcon(article.source)}
-                        <span className="source-name">{article.source}</span>
-                        <span className="divider-dot">•</span>
-                        <span className="article-time">{formatTime(article.datetime)}</span>
-                      </div>
+                      <span className="article-time">{formatTime(article.datetime)}</span>
                       
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                         {article.matchedHoldings && article.matchedHoldings.length > 0 && (
