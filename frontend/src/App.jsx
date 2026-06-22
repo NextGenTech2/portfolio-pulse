@@ -17,7 +17,8 @@ import {
   ExternalLink,
   Trash2,
   Sun,
-  Moon
+  Moon,
+  Share2
 } from "lucide-react";
 
 export default function App() {
@@ -178,6 +179,13 @@ export default function App() {
       // Revert local state if save fails
       setSavedArticles(savedArticles);
     }
+  };
+
+  const handleShareApp = (e) => {
+    e.preventDefault();
+    const appUrl = "https://myportfoliopulse.vercel.app/";
+    navigator.clipboard.writeText(appUrl);
+    alert("Application link copied to clipboard!");
   };
 
   // Helper to generate initials for avatar/logo

@@ -6,8 +6,49 @@ import {
   Newspaper, 
   TrendingUp,
   Bookmark,
-  Activity
+  Activity,
+  Clock,
+  Share2,
+  ChevronRight,
+  ArrowUpRight,
+  ArrowDownRight,
+  MoreVertical
 } from "lucide-react";
+
+// Mock helper to generate dynamic stock quotes matching screenshot values
+const getStockPriceForTicker = (ticker = "") => {
+  const cleanTicker = ticker.replace(/\.(NS|BO)$/i, "").toUpperCase();
+  
+  const screenshotQuotes = {
+    "SIEMENS": { price: "₹4,156.80", change: "▲ +0.82%", isPositive: true },
+    "INDIGO": { price: "₹4,156.80", change: "▲ +0.82%", isPositive: true },
+    "MCX": { price: "₹1,678.90", change: "▼ -0.45%", isPositive: false },
+    "HCLTECH": { price: "₹1,678.90", change: "▲ +0.82%", isPositive: true },
+    "BSE": { price: "₹2,956.45", change: "▲ +1.25%", isPositive: true }
+  };
+  
+  if (screenshotQuotes[cleanTicker]) {
+    return screenshotQuotes[cleanTicker];
+  }
+  
+  // Stable hash fallback
+  let hash = 0;
+  for (let i = 0; i < cleanTicker.length; i++) {
+    hash = cleanTicker.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const priceBase = Math.abs(hash % 6000) + 500;
+  const changePercent = ((hash % 300) / 100).toFixed(2);
+  const isPositive = Number(changePercent) >= -0.5;
+  const changeVal = Math.abs(Number(changePercent)).toFixed(2);
+  const formattedPrice = `₹${priceBase.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formattedChange = `${isPositive ? "▲ +" : "▼ "}${changeVal}%`;
+  
+  return {
+    price: formattedPrice,
+    change: formattedChange,
+    isPositive
+  };
+};
 
 export default function NewsFeed({ 
   holdings, 
@@ -21,6 +62,40 @@ export default function NewsFeed({
   const [refreshing, setRefreshing] = useState(false);
   const [pullStatus, setPullStatus] = useState("idle");
   const [pullY, setPullY] = useState(0);
+  
+  // Simple heuristic-based Sentiment Analyzer
+  const getSentiment = (headline = "", summary = "") => {
+    const text = `${headline} ${summary}`.toLowerCase();
+    
+    const positiveWords = [
+      "buy", "upgrade", "gain", "rise", "positive", "growth", "surges", "soars", 
+      "higher", "profitable", "bullish", "jump", "record high", "beats", "strong buy"
+    ];
+    
+    const negativeWords = [
+      "sell", "downgrade", "loss", "fall", "negative", "drop", "slumps", "plunges", 
+      "lower", "unprofitable", "bearish", "crash", "record low", "misses", "headwinds"
+    ];
+    
+    let posCount = 0;
+    let negCount = 0;
+    
+    positiveWords.forEach(word => {
+      if (text.includes(word)) posCount++;
+    });
+    
+    negativeWords.forEach(word => {
+      if (text.includes(word)) negCount++;
+    });
+    
+    if (posCount > negCount) {
+      return { label: "POSITIVE", color: "positive", icon: <ArrowUpRight size={12} /> };
+    } else if (negCount > posCount) {
+      return { label: "NEGATIVE", color: "negative", icon: <ArrowDownRight size={12} /> };
+    } else {
+      return { label: "NEUTRAL", color: "neutral", icon: null };
+    }
+  };
   
   const touchStart = useRef(0);
   const scrollContainerRef = useRef(null);
@@ -345,44 +420,7 @@ export default function NewsFeed({
           {filteredNews.map((article, index) => {
             const isFeatured = index === 0 && filterMode === "curated";
             const isBookmarked = savedArticleIds.includes(article.id);
-
-            if (isFeatured) {
-              return (
-                <a 
-                  key={article.id} 
-                  href={article.url} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="news-card featured"
-                >
-                  <div className="featured-card-body">
-                    <div className="featured-card-content">
-                      <h3 className="news-headline">{article.headline}</h3>
-                      {article.summary && (
-                        <p className="news-summary">{article.summary}</p>
-                      )}
-                    </div>
-                    <div className="featured-card-media">
-                      {renderFallbackIllustration(article.headline, article.summary)}
-                    </div>
-                  </div>
-                  <div className="card-footer-custom">
-                    <div className="source-info">
-                      {getSourceIcon(article.source)}
-                      <span className="source-name">{article.source}</span>
-                      <span className="divider-dot">•</span>
-                      <span className="article-time">{formatTime(article.datetime)}</span>
-                    </div>
-                    <button 
-                      className={`btn-bookmark-action ${isBookmarked ? "active" : ""}`}
-                      onClick={(e) => toggleBookmark(e, article.id)}
-                    >
-                      <Bookmark size={14} fill={isBookmarked ? "currentColor" : "none"} />
-                    </button>
-                  </div>
-                </a>
-              );
-            }
+            const sentiment = getSentiment(article.headline, article.summary);
 
             return (
               <a 
@@ -390,41 +428,69 @@ export default function NewsFeed({
                 href={article.url} 
                 target="_blank" 
                 rel="noopener noreferrer" 
-                className="news-card regular"
+                className={`news-card ${isFeatured ? "featured" : "regular"}`}
               >
-                <div className="regular-card-inner">
-                  <div className="regular-card-left">
-                    <div className="regular-card-media">
-                      {renderFallbackIllustration(article.headline, article.summary)}
-                    </div>
-                    <div className="source-info-left">
-                      {getSourceIcon(article.source)}
-                      <span className="source-name-left" title={article.source}>
-                        {article.source}
-                      </span>
+                <div className="premium-card-inner">
+                  {/* Left Column: Image */}
+                  <div className="premium-card-left">
+                    <div className="premium-card-media">
+                      {article.image ? (
+                        <img 
+                          src={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/image-proxy?url=${encodeURIComponent(article.image)}`} 
+                          alt="" 
+                          className="news-illustration" 
+                          crossOrigin="anonymous" 
+                          onLoad={() => console.log('Image loaded', article.id, article.image)}
+                          onError={(e) => {
+                            console.error('Image load error', article.image, e);
+                            e.target.style.display = "none";
+                            const next = e.target.nextSibling;
+                            if (next) next.style.display = "block";
+                          }}
+                        />
+                      ) : null}
+                      <div style={{ display: article.image ? "none" : "block", width: "100%", height: "100%" }}>
+                        {renderFallbackIllustration(article.headline, article.summary)}
+                      </div>
                     </div>
                   </div>
-                  <div className="regular-card-content">
+
+                  {/* Right Column: Headline, Summary, Bottom details */}
+                  <div className="premium-card-middle">
                     <h3 className="news-headline">{article.headline}</h3>
+
                     {article.summary && (
                       <p className="news-summary">{article.summary}</p>
                     )}
-                    
-                    <div className="card-footer-custom">
+                    <div className="publisher-meta-row">
+                      {getSourceIcon(article.source)}
+                      <span className="source-name">{article.source}</span>
+                      <span className="divider-dot">•</span>
                       <span className="article-time">{formatTime(article.datetime)}</span>
-                      
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        {article.matchedHoldings && article.matchedHoldings.length > 0 && (
-                          <span className="badge-stock-matched">
-                            <Tag size={9} />
-                            Related to: {article.matchedHoldings.join(", ").toUpperCase()}
-                          </span>
-                        )}
+                      {article.matchedHoldings && article.matchedHoldings.length > 0 && (
+                        <span className="stock-tag-inline">
+                          {article.matchedHoldings[0].replace(/\.(NS|BO)$/i, "").toUpperCase()}
+                        </span>
+                      )}
+                      <div className="premium-card-actions-inline">
                         <button 
-                          className={`btn-bookmark-action ${isBookmarked ? "active" : ""}`}
+                          className={`btn-card-action-mini bookmark ${isBookmarked ? "active" : ""}`}
                           onClick={(e) => toggleBookmark(e, article.id)}
+                          title={isBookmarked ? "Remove Bookmark" : "Save Article"}
                         >
                           <Bookmark size={13} fill={isBookmarked ? "currentColor" : "none"} />
+                        </button>
+                        <button 
+                          className="btn-card-action-mini share"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(article.url);
+                            alert("Article link copied to clipboard!");
+                          }}
+                          title="Share Article"
+                        >
+                          <Share2 size={13} />
                         </button>
                       </div>
                     </div>
