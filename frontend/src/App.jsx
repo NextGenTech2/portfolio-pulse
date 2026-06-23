@@ -392,6 +392,7 @@ function StockDetailsPanel({ ticker }) {
       <div className="detail-source-badge">
         <Info size={10} />
         <span>
+          {apiMode === "live-google" && "Live Google Finance Feed"}
           {apiMode === "live-finnhub" && "Live Finnhub Feed"}
           {apiMode === "live-alphavantage" && "Live Alpha Vantage Feed"}
           {apiMode === "simulated" && "Simulated feed (Add VITE_FINNHUB_API_KEY to .env for live stats)"}
@@ -926,7 +927,7 @@ export default function App() {
                       <span className="index-name">NIFTY 50</span>
                       <span className="index-badge positive">+1.24%</span>
                     </div>
-                    <div className="index-value">23,456.80</div>
+                    <div className="index-value">23,824.10</div>
                     <div className="index-footer">NSE India</div>
                   </div>
                   
@@ -935,34 +936,61 @@ export default function App() {
                       <span className="index-name">SENSEX</span>
                       <span className="index-badge positive">+1.18%</span>
                     </div>
-                    <div className="index-value">77,215.10</div>
+                    <div className="index-value">76,200.68</div>
                     <div className="index-footer">BSE India</div>
                   </div>
 
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
-                      <span className="index-name">BANK NIFTY</span>
+                      <span className="index-name">NIFTY BANK</span>
                       <span className="index-badge positive">+1.45%</span>
                     </div>
-                    <div className="index-value">51,205.40</div>
+                    <div className="index-value">57,183.75</div>
                     <div className="index-footer">NSE India</div>
                   </div>
 
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
-                      <span className="index-name">MIDCAP 100</span>
+                      <span className="index-name">NIFTY Midcap 100</span>
                       <span className="index-badge positive">+0.85%</span>
                     </div>
-                    <div className="index-value">52,410.20</div>
+                    <div className="index-value">62,070.35</div>
                     <div className="index-footer">NSE India</div>
                   </div>
 
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
-                      <span className="index-name">SMALLCAP 100</span>
+                      <span className="index-name">NIFTY NEXT 50</span>
                       <span className="index-badge positive">+0.95%</span>
                     </div>
-                    <div className="index-value">16,845.60</div>
+                    <div className="index-value">72,068.75</div>
+                    <div className="index-footer">NSE India</div>
+                  </div>
+
+                  <div className="index-card skeleton-loading">
+                    <div className="index-header">
+                      <span className="index-name">NIFTY 100</span>
+                      <span className="index-badge positive">+0.75%</span>
+                    </div>
+                    <div className="index-value">24,907.80</div>
+                    <div className="index-footer">NSE India</div>
+                  </div>
+
+                  <div className="index-card skeleton-loading">
+                    <div className="index-header">
+                      <span className="index-name">NIFTY Smallcap 100</span>
+                      <span className="index-badge positive">+0.65%</span>
+                    </div>
+                    <div className="index-value">18,805.90</div>
+                    <div className="index-footer">NSE India</div>
+                  </div>
+
+                  <div className="index-card skeleton-loading">
+                    <div className="index-header">
+                      <span className="index-name">India VIX</span>
+                      <span className="index-badge positive">+1.10%</span>
+                    </div>
+                    <div className="index-value">13.94</div>
                     <div className="index-footer">NSE India</div>
                   </div>
 
