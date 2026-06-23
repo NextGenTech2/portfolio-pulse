@@ -53,7 +53,95 @@ function StockDetailsPanel({ ticker }) {
       const AV_KEY = import.meta.env.VITE_ALPHA_VANTAGE_API_KEY;
       const cleanTicker = ticker.toUpperCase();
 
-      // 1. Finnhub Fetch
+      // 1. Try Google Finance (Bypassing CORS via deployed image-proxy edge function)
+      try {
+        let exchangeTicker = cleanTicker;
+        if (exchangeTicker.endsWith(".NS")) {
+          exchangeTicker = exchangeTicker.replace(".NS", "") + ":NSE";
+        } else if (exchangeTicker.endsWith(".BO")) {
+          exchangeTicker = exchangeTicker.replace(".BO", "") + ":BSE";
+        } else if (!exchangeTicker.includes(":")) {
+          exchangeTicker = exchangeTicker + ":NSE";
+        }
+
+        const targetUrl = `https://www.google.com/finance/quote/${exchangeTicker}`;
+        const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/image-proxy?url=${encodeURIComponent(targetUrl)}`;
+
+        const response = await fetch(proxyUrl, {
+          headers: {
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          }
+        });
+
+        if (response.ok) {
+          const html = await response.text();
+
+          // Find position of main stock header: class="gO24Ff"
+          const headerIdx = html.indexOf('class="gO24Ff"');
+          if (headerIdx !== -1) {
+            const subHtml = html.substring(headerIdx, headerIdx + 12000);
+
+            // Price: jsname="Pdsbrc"[^>]*><span>([^<]+)</span>
+            const priceMatch = subHtml.match(/jsname="Pdsbrc"[^>]*><span>([^<]+)<\/span>/);
+            const priceText = priceMatch ? priceMatch[1] : null;
+
+            // Change Pct: jsname="vY9t3b"[^>]*><span[^>]*>([^<]+)</span>
+            const pctMatch = subHtml.match(/jsname="vY9t3b"[^>]*><span[^>]*>([^<]+)<\/span>/);
+            const pctText = pctMatch ? pctMatch[1] : null;
+
+            // Change Val: jsname="xnruHf"[^>]*><span>([^<]+)</span>
+            const valMatch = subHtml.match(/jsname="xnruHf"[^>]*><span>([^<]+)<\/span>/);
+            const valText = valMatch ? valMatch[1] : null;
+
+            // Details table: class="SwQK7">Label</div><div class="dO6ijd">Value</div>
+            const details = {};
+            const detailRegex = /class="SwQK7">([^<]+)<\/div><div class="dO6ijd">([^<]+)<\/div>/g;
+            let match;
+            while ((match = detailRegex.exec(html)) !== null) {
+              details[match[1].trim().toLowerCase()] = match[2].trim();
+            }
+
+            if (priceText && active) {
+              const parsedPrice = parseFloat(priceText.replace(/[^\d.-]/g, ""));
+              const parsedChange = valText ? parseFloat(valText.replace(/[^\d.-]/g, "")) : 0;
+              const parsedChangePercent = pctText ? parseFloat(pctText.replace(/[^\d.-]/g, "")) : 0;
+
+              const open = details["open"] ? parseFloat(details["open"].replace(/[^\d.-]/g, "")) : 0;
+              const high = details["high"] ? parseFloat(details["high"].replace(/[^\d.-]/g, "")) : 0;
+              const low = details["low"] ? parseFloat(details["low"].replace(/[^\d.-]/g, "")) : 0;
+
+              const weekHigh52 = details["52-wk high"] || "-";
+              const weekLow52 = details["52-wk low"] || "-";
+              const range52 = weekHigh52 !== "-" && weekLow52 !== "-" ? `${weekLow52} - ${weekHigh52}` : "-";
+
+              const marketCap = details["mkt. cap"] || details["mkt cap"] || "-";
+              const peRatio = details["p/e ratio"] || "-";
+              const dividend = details["div yield"] || details["dividend yield"] || "-";
+
+              setData({
+                price: parsedPrice,
+                change: parsedChange,
+                changePercent: parsedChangePercent,
+                open,
+                high,
+                low,
+                range52,
+                marketCap,
+                peRatio,
+                dividend,
+                qtrDivAmt: "-"
+              });
+              setApiMode("live-google");
+              setLoading(false);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Google Finance proxy fetch failed, falling back...", err);
+      }
+
+      // 2. Finnhub Fetch
       if (FINNHUB_KEY) {
         try {
           const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${cleanTicker}&token=${FINNHUB_KEY}`);
@@ -106,7 +194,7 @@ function StockDetailsPanel({ ticker }) {
         }
       }
 
-      // 2. Alpha Vantage Fetch
+      // 3. Alpha Vantage Fetch
       if (AV_KEY && active) {
         try {
           const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${cleanTicker}&apikey=${AV_KEY}`);

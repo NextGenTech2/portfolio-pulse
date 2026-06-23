@@ -25,7 +25,12 @@ serve(async (req) => {
       });
     }
 
-    const remoteResp = await fetch(imageUrl);
+    const remoteResp = await fetch(imageUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      }
+    });
+    
     if (!remoteResp.ok) {
       return new Response(JSON.stringify({ error: "Failed to fetch image" }), {
         status: remoteResp.status,
@@ -36,8 +41,16 @@ serve(async (req) => {
     // Clone headers but ensure CORS is open for our frontend.
     const headers = new Headers(remoteResp.headers);
     headers.set("Access-Control-Allow-Origin", "*");
-    // Optional caching – let the browser cache for a day.
-    headers.set("Cache-Control", "public, max-age=86400");
+    
+    // Disable caching for live quote data
+    if (imageUrl.includes("yahoo.com") || imageUrl.includes("finance")) {
+      headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+      headers.set("Pragma", "no-cache");
+      headers.set("Expires", "0");
+    } else {
+      // Optional caching – let the browser cache for a day.
+      headers.set("Cache-Control", "public, max-age=86400");
+    }
 
     // Stream the body directly.
     return new Response(remoteResp.body, {
