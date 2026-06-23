@@ -7,6 +7,8 @@ A premium, modern, portfolio-centric market intelligence web application. The ap
 ## 🚀 Key Features
 
 * **Instant Broker Integrations:** Import your holdings CSV exported directly from Zerodha (Kite), Upstox, or Groww. The uploader resides in a collapsed bar to maximize screen space.
+* **Expandable Stock Details:** Click any holding card in the Portfolio tab to expand it. It lazy-loads real-time quotes (price, day change, high, low, open) and metrics (52-week range, market cap, P/E ratio, dividend details) from Finnhub or Alpha Vantage, formatted in Rupees (`₹`) using Indian numbering formatting rules.
+* **Collapsible Results Calendar:** An earnings calendar widget in the Portfolio tab that is collapsed by default and lists upcoming earnings result announcement dates for your holdings, sorted chronologically (earliest first), with live Finnhub fetching and deterministic fallbacks.
 * **Curated Stock Ribbon:** Dynamically shows all active tickers, rendered with custom gradient badges, search capability, and active state indicators.
 * **Aggregated Market Indices:** A horizontally scrollable widget on the **Market** tab tracking Indian indexes (`Nifty 50`, `Sensex`, `Bank Nifty`, `Midcap 100`, `Smallcap 100`) and US indexes (`S&P 500`, `NASDAQ`, `Dow Jones`).
 * **Multi-Source News Aggregator Edge Function:**

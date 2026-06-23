@@ -20,12 +20,471 @@ import {
   Sun,
   Moon,
   Share2,
-  Zap
+  Zap,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  Calendar
 } from "lucide-react";
+
+
+
+// Currency Formatter Helper (Always in Rupees)
+const formatCurrency = (val) => {
+  if (val === null || val === undefined || isNaN(val)) return "-";
+  return `₹${Number(val).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+// Stock Details Sub-component
+function StockDetailsPanel({ ticker }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [apiMode, setApiMode] = useState("simulated");
+
+  useEffect(() => {
+    let active = true;
+    
+    const fetchDetails = async () => {
+      setLoading(true);
+      setError(null);
+
+      const FINNHUB_KEY = import.meta.env.VITE_FINNHUB_API_KEY;
+      const AV_KEY = import.meta.env.VITE_ALPHA_VANTAGE_API_KEY;
+      const cleanTicker = ticker.toUpperCase();
+
+      // 1. Finnhub Fetch
+      if (FINNHUB_KEY) {
+        try {
+          const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${cleanTicker}&token=${FINNHUB_KEY}`);
+          if (!res.ok) throw new Error("Finnhub quote API error");
+          const quote = await res.json();
+          if (quote.c && active) {
+            let mktCap = "-";
+            let peRatio = "-";
+            let weekHigh52 = "-";
+            let weekLow52 = "-";
+
+            try {
+              const metricRes = await fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${cleanTicker}&metric=all&token=${FINNHUB_KEY}`);
+              if (metricRes.ok) {
+                const metrics = await metricRes.json();
+                const m = metrics.metric || {};
+                weekHigh52 = m["52WeekHigh"] !== undefined ? m["52WeekHigh"] : "-";
+                weekLow52 = m["52WeekLow"] !== undefined ? m["52WeekLow"] : "-";
+                
+                const mc = m["marketCapitalization"];
+                if (mc !== undefined) {
+                  mktCap = mc > 1000 ? `${(mc / 1000).toFixed(2)}B` : `${mc.toFixed(2)}M`;
+                }
+                
+                peRatio = m["peTTM"] !== undefined ? m["peTTM"].toFixed(2) : (m["peNormalizedBasic"] !== undefined ? m["peNormalizedBasic"].toFixed(2) : "-");
+              }
+            } catch (err) {
+              console.warn("Metrics fetch failed", err);
+            }
+
+            setData({
+              price: quote.c,
+              change: quote.d,
+              changePercent: quote.dp,
+              open: quote.o,
+              high: quote.h,
+              low: quote.l,
+              range52: weekHigh52 !== "-" && weekLow52 !== "-" ? `${formatCurrency(weekLow52, ticker)} - ${formatCurrency(weekHigh52, ticker)}` : "-",
+              marketCap: mktCap,
+              peRatio: peRatio,
+              dividend: "-",
+              qtrDivAmt: "-"
+            });
+            setApiMode("live-finnhub");
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.warn("Finnhub failed, trying Alpha Vantage", err);
+        }
+      }
+
+      // 2. Alpha Vantage Fetch
+      if (AV_KEY && active) {
+        try {
+          const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${cleanTicker}&apikey=${AV_KEY}`);
+          if (!res.ok) throw new Error("Alpha Vantage Quote API error");
+          const quoteJson = await res.json();
+          const quote = quoteJson["Global Quote"] || {};
+          if (quote["05. price"]) {
+            let mktCap = "-";
+            let peRatio = "-";
+            let weekHigh52 = "-";
+            let weekLow52 = "-";
+            let dividend = "-";
+            let qtrDivAmt = "-";
+
+            try {
+              const overviewRes = await fetch(`https://www.alphavantage.co/query?function=OVERVIEW&symbol=${cleanTicker}&apikey=${AV_KEY}`);
+              if (overviewRes.ok) {
+                const overview = await overviewRes.json();
+                if (overview.Symbol) {
+                  weekHigh52 = overview["52WeekHigh"] || "-";
+                  weekLow52 = overview["52WeekLow"] || "-";
+                  
+                  const mc = Number(overview["MarketCapitalization"]);
+                  if (!isNaN(mc)) {
+                    mktCap = mc > 1000000000 ? `${(mc / 1000000000).toFixed(2)}B` : `${(mc / 1000000).toFixed(2)}M`;
+                  }
+                  
+                  peRatio = overview["PERatio"] || "-";
+                  dividend = overview["DividendYield"] ? `${(Number(overview["DividendYield"]) * 100).toFixed(2)}%` : "-";
+                  qtrDivAmt = overview["DividendPerShare"] || "-";
+                }
+              }
+            } catch (err) {
+              console.warn("Overview fetch failed", err);
+            }
+
+            setData({
+              price: Number(quote["05. price"]),
+              change: Number(quote["09. change"]),
+              changePercent: Number((quote["10. change percent"] || "0%").replace("%", "")),
+              open: Number(quote["02. open"]) || 0,
+              high: Number(quote["03. high"]) || 0,
+              low: Number(quote["04. low"]) || 0,
+              range52: weekHigh52 !== "-" && weekLow52 !== "-" ? `${formatCurrency(Number(weekLow52), ticker)} - ${formatCurrency(Number(weekHigh52), ticker)}` : "-",
+              marketCap: mktCap,
+              peRatio: peRatio,
+              dividend: dividend,
+              qtrDivAmt: qtrDivAmt
+            });
+            setApiMode("live-alphavantage");
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.warn("Alpha Vantage failed", err);
+        }
+      }
+
+      // 3. Fallback: Simulated High Fidelity Deterministic Data
+      if (active) {
+        const normalizedTicker = cleanTicker.replace(/\.(NS|BO)$/i, "");
+        if (normalizedTicker === "DIXON") {
+          setData({
+            price: 11890.00,
+            change: -446.00,
+            changePercent: -3.62,
+            open: 12340.00,
+            high: 12340.00,
+            low: 11878.00,
+            range52: "₹9,600.00 - ₹18,471.00",
+            marketCap: "72.07 KCr",
+            peRatio: "44.14",
+            dividend: "-",
+            qtrDivAmt: "-"
+          });
+        } else {
+          let hash = 0;
+          for (let i = 0; i < normalizedTicker.length; i++) {
+            hash = normalizedTicker.charCodeAt(i) + ((hash << 5) - hash);
+          }
+          const absHash = Math.abs(hash);
+          const priceBase = (absHash % 6000) + 100;
+          const open = priceBase * (1 + ((absHash % 100) - 48) / 2000);
+          const high = Math.max(priceBase, open) * (1 + (absHash % 25) / 1000);
+          const low = Math.min(priceBase, open) * (1 - (absHash % 25) / 1000);
+          const change = priceBase - open;
+          const changePercent = (change / open) * 100;
+
+          const low52 = low * 0.72;
+          const high52 = high * 1.45;
+
+          const unit = " KCr";
+          const mktCapVal = ((absHash % 480) + 5).toFixed(2);
+
+          const peVal = ((absHash % 65) + 8).toFixed(2);
+          const hasDiv = absHash % 4 === 0;
+          const dividend = hasDiv ? `${((absHash % 35) / 10).toFixed(2)}%` : "-";
+
+          setData({
+            price: priceBase,
+            change: change,
+            changePercent: changePercent,
+            open: open,
+            high: high,
+            low: low,
+            range52: `${formatCurrency(low52, ticker)} - ${formatCurrency(high52, ticker)}`,
+            marketCap: `${mktCapVal}${unit}`,
+            peRatio: peVal,
+            dividend: dividend,
+            qtrDivAmt: "-"
+          });
+        }
+        
+        // Minor mock latency to display premium shimmer loading effect
+        setTimeout(() => {
+          if (active) {
+            setApiMode("simulated");
+            setLoading(false);
+          }
+        }, 500);
+      }
+    };
+
+    fetchDetails();
+
+    return () => {
+      active = false;
+    };
+  }, [ticker]);
+
+  if (loading) {
+    return (
+      <div className="holding-detail-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="detail-skeleton-grid">
+          <div className="detail-skeleton-item" />
+          <div className="detail-skeleton-item" />
+          <div className="detail-skeleton-item" />
+          <div className="detail-skeleton-item" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="holding-detail-panel" onClick={(e) => e.stopPropagation()}>
+        <p style={{ color: "#f87171", fontSize: "0.72rem" }}>Error fetching real-time data.</p>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  return (
+    <div className="holding-detail-panel" onClick={(e) => e.stopPropagation()}>
+      <div className="detail-grid">
+        <div className="detail-item">
+          <span className="detail-label">Current Price</span>
+          <span className="detail-value">{formatCurrency(data.price, ticker)}</span>
+        </div>
+        <div className="detail-item">
+          <span className="detail-label">Day Change</span>
+          <span className={`detail-value ${data.change >= 0 ? "positive" : "negative"}`}>
+            {data.change >= 0 ? "+" : ""}{data.change.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({data.changePercent.toFixed(2)}%)
+          </span>
+        </div>
+        <div className="detail-item">
+          <span className="detail-label">Open</span>
+          <span className="detail-value">{formatCurrency(data.open, ticker)}</span>
+        </div>
+        <div className="detail-item">
+          <span className="detail-label">High / Low</span>
+          <span className="detail-value">
+            {formatCurrency(data.high, ticker)} / {formatCurrency(data.low, ticker)}
+          </span>
+        </div>
+        <div className="detail-item">
+          <span className="detail-label">52-wk range</span>
+          <span className="detail-value">{data.range52}</span>
+        </div>
+        <div className="detail-item">
+          <span className="detail-label">Mkt cap</span>
+          <span className="detail-value">{data.marketCap}</span>
+        </div>
+        <div className="detail-item">
+          <span className="detail-label">P/E ratio</span>
+          <span className="detail-value">{data.peRatio}</span>
+        </div>
+        <div className="detail-item">
+          <span className="detail-label">Dividend</span>
+          <span className="detail-value">{data.dividend}</span>
+        </div>
+      </div>
+      
+      <div className="detail-source-badge">
+        <Info size={10} />
+        <span>
+          {apiMode === "live-finnhub" && "Live Finnhub Feed"}
+          {apiMode === "live-alphavantage" && "Live Alpha Vantage Feed"}
+          {apiMode === "simulated" && "Simulated feed (Add VITE_FINNHUB_API_KEY to .env for live stats)"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Results Calendar Component
+function ResultsCalendar({ holdings }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [calendarData, setCalendarData] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !holdings || holdings.length === 0) return;
+
+    let active = true;
+    const fetchEarningsDates = async () => {
+      setLoading(true);
+      const FINNHUB_KEY = import.meta.env.VITE_FINNHUB_API_KEY;
+
+      if (FINNHUB_KEY) {
+        try {
+          const res = await fetch(`https://finnhub.io/api/v1/calendar/earnings?from=2026-06-01&to=2026-09-30&token=${FINNHUB_KEY}`);
+          if (res.ok) {
+            const data = await res.json();
+            const earnings = data.earningsCalendar || [];
+            const holdingBases = holdings.map(h => h.toUpperCase().replace(/\.(NS|BO)$/i, ""));
+            const holdingMap = {};
+            holdings.forEach(h => {
+              holdingMap[h.toUpperCase().replace(/\.(NS|BO)$/i, "")] = h;
+            });
+
+            const matched = [];
+            earnings.forEach(item => {
+              const itemSymbol = item.symbol.toUpperCase();
+              const baseSymbol = itemSymbol.replace(/\.(NS|BO)$/i, "");
+              
+              if (holdingBases.includes(baseSymbol)) {
+                const dateParts = item.date.split("-");
+                if (dateParts.length === 3) {
+                  const y = parseInt(dateParts[0]);
+                  const m = parseInt(dateParts[1]) - 1;
+                  const d = parseInt(dateParts[2]);
+                  const dObj = new Date(y, m, d);
+                  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                  const dateStr = `${String(d).padStart(2, "0")}-${months[m]}-${y}`;
+                  
+                  matched.push({
+                    symbol: holdingMap[baseSymbol],
+                    date: dateStr,
+                    dateObj: dObj
+                  });
+                }
+              }
+            });
+
+            if (matched.length > 0 && active) {
+              matched.sort((a, b) => a.dateObj - b.dateObj);
+              setCalendarData(matched);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn("Finnhub earnings calendar fetch failed", err);
+        }
+      }
+
+      // Fallback: Deterministic Simulated Earnings Dates (Q1 FY27 / Jul-Aug 2026)
+      if (active) {
+        const simulated = [];
+        for (const ticker of holdings) {
+          const cleanTicker = ticker.toUpperCase();
+          const normalized = cleanTicker.replace(/\.(NS|BO)$/i, "");
+          let dateStr = "";
+          let dateObj = null;
+
+          if (normalized === "TCS") {
+            dateStr = "10-Jul-2026";
+            dateObj = new Date("2026-07-10");
+          } else if (normalized === "TEJASNET" || normalized.includes("TEJAS")) {
+            dateStr = "15-Jul-2026";
+            dateObj = new Date("2026-07-15");
+          } else if (normalized === "WAAREE" || normalized.includes("WAAREE")) {
+            dateStr = "16-Jul-2026";
+            dateObj = new Date("2026-07-16");
+          } else if (normalized === "ICICIBANK" || normalized === "ICICI") {
+            dateStr = "18-Jul-2026";
+            dateObj = new Date("2026-07-18");
+          } else if (normalized === "DIXON") {
+            dateStr = "28-Jul-2026";
+            dateObj = new Date("2026-07-28");
+          } else {
+            let hash = 0;
+            for (let i = 0; i < normalized.length; i++) {
+              hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const absHash = Math.abs(hash);
+            const month = (absHash % 2) === 0 ? "Jul" : "Aug";
+            const monthNum = month === "Jul" ? 6 : 7;
+            const day = (absHash % 28) + 1;
+            dateStr = `${String(day).padStart(2, "0")}-${month}-2026`;
+            dateObj = new Date(2026, monthNum, day);
+          }
+
+          simulated.push({
+            symbol: ticker,
+            date: dateStr,
+            dateObj: dateObj
+          });
+        }
+
+        simulated.sort((a, b) => a.dateObj - b.dateObj);
+        
+        // Brief artificial delay for loader feel
+        setTimeout(() => {
+          if (active) {
+            setCalendarData(simulated);
+            setLoading(false);
+          }
+        }, 400);
+      }
+    };
+
+    fetchEarningsDates();
+
+    return () => {
+      active = false;
+    };
+  }, [isOpen, holdings]);
+
+  return (
+    <div className="results-calendar-section">
+      <button 
+        className="calendar-header-btn" 
+        onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+      >
+        <span className="calendar-header-title">
+          <Calendar size={15} style={{ color: "#ff9f43" }} />
+          <span>Upcoming Results Calendar</span>
+        </span>
+        <div style={{ color: "hsl(var(--text-muted))", display: "flex", alignItems: "center" }}>
+          {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </div>
+      </button>
+      
+      {isOpen && (
+        <div className="calendar-content">
+          {loading ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem 0", gap: "0.5rem" }}>
+              <Activity className="spinner" size={14} style={{ color: "hsl(var(--accent-primary))" }} />
+              <span style={{ fontSize: "0.75rem", color: "hsl(var(--text-secondary))" }}>Scanning result dates...</span>
+            </div>
+          ) : calendarData.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "1rem", color: "hsl(var(--text-muted))", fontSize: "0.75rem" }}>
+              No upcoming results found.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {calendarData.map((item, index) => (
+                <div key={index} className="calendar-row">
+                  <span className="calendar-symbol">{item.symbol}</span>
+                  <span className="calendar-date">{item.date}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [holdings, setHoldings] = useState([]);
+  const [expandedTicker, setExpandedTicker] = useState(null);
   const [savedArticles, setSavedArticles] = useState([]);
   const [savedArticlesData, setSavedArticlesData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -475,26 +934,51 @@ export default function App() {
             />
 
             {holdings.length > 0 && (
+              <ResultsCalendar holdings={holdings} />
+            )}
+
+            {holdings.length > 0 && (
               <div className="holdings-list-section">
                 <div className="holdings-list-header">
                   <h3>Tracked Holdings</h3>
                   <span>{holdings.length} Assets</span>
                 </div>
                 <div className="holdings-list-grid">
-                  {holdings.map((ticker, i) => (
-                    <div key={i} className="holding-list-item">
+                  {holdings.map((ticker, i) => {
+                    const isExpanded = expandedTicker === ticker;
+                    return (
                       <div 
-                        className="item-logo" 
-                        style={{ background: getAvatarGradient(ticker) }}
+                        key={i} 
+                        className={`holding-list-item ${isExpanded ? "expanded" : ""}`}
+                        onClick={() => setExpandedTicker(isExpanded ? null : ticker)}
+                        style={{ 
+                          gridColumn: isExpanded ? "span 2" : "auto",
+                          flexDirection: "column",
+                          alignItems: "stretch",
+                          cursor: "pointer"
+                        }}
                       >
-                        {getInitials(ticker)}
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", width: "100%" }}>
+                          <div 
+                            className="item-logo" 
+                            style={{ background: getAvatarGradient(ticker) }}
+                          >
+                            {getInitials(ticker)}
+                          </div>
+                          <div className="item-details" style={{ flexGrow: 1 }}>
+                            <span className="item-symbol">{ticker}</span>
+                            <span className="item-market">NSE / BSE</span>
+                          </div>
+                          <div style={{ color: "hsl(var(--text-muted))", display: "flex", alignItems: "center" }}>
+                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          </div>
+                        </div>
+                        {isExpanded && (
+                          <StockDetailsPanel ticker={ticker} />
+                        )}
                       </div>
-                      <div className="item-details">
-                        <span className="item-symbol">{ticker}</span>
-                        <span className="item-market">NSE / BSE</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
