@@ -752,6 +752,23 @@ body {
   margin-top: 0.1rem;
 }
 
+.index-card.skeleton-loading {
+  animation: pulse-skeleton 1.5s infinite ease-in-out;
+  opacity: 0.65;
+}
+
+@keyframes pulse-skeleton {
+  0% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0.45;
+  }
+}
+
 /* Portfolio List Grid */
 .tab-portfolio-container {
   padding: 0 1.25rem;
@@ -1094,3 +1111,208 @@ body {
   color: #ef4444;
   background-color: rgba(239, 68, 68, 0.15);
 }
+
+/* Quick Read Layout & Styles */
+.main-content-quick-read {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: calc(100vh - 56px); /* subtract header height */
+  position: relative;
+}
+
+.quick-read-scroll-container {
+  height: 100%;
+  width: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.quick-read-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+.quick-read-card {
+  height: 100%;
+  width: 100%;
+  position: relative;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background-size: cover;
+  background-position: center;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.quick-read-fallback-pattern {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  overflow: hidden;
+}
+
+.quick-read-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem;
+  width: 100%;
+  box-sizing: border-box;
+  z-index: 10;
+}
+
+.btn-header-action {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  padding: 0.45rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.btn-header-action:hover {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.quick-read-card-details {
+  padding: 1.25rem 1.25rem 96px 1.25rem; /* extra bottom padding to clear the nav bar */
+  z-index: 10;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.quick-read-card-inner {
+  background: #ffffff; /* pure white background overlay */
+  border-radius: 20px;
+  padding: 1.5rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  color: #1e293b;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-sizing: border-box;
+}
+
+.quick-read-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.15rem;
+}
+
+.quick-read-source {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #f97316;
+  letter-spacing: 0.8px;
+}
+
+.quick-read-ticker-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #3b82f6;
+  background-color: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.btn-bookmark-action {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 50%;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-bookmark-action:hover {
+  color: #f59e0b;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.btn-bookmark-action.active {
+  color: #f59e0b;
+}
+
+.quick-read-title {
+  font-size: 1.12rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #0f172a;
+  margin: 0;
+  font-family: Georgia, serif;
+}
+
+.quick-read-summary {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #475569;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.quick-read-more-btn {
+  display: block;
+  text-align: center;
+  background: #fdf0dd; /* matching screenshot beige */
+  border: 1px solid #fadcb9;
+  color: #1e293b;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.7rem 1.25rem;
+  border-radius: 12px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 0.25rem;
+  box-shadow: 0 2px 4px rgba(253, 240, 221, 0.2);
+}
+
+.quick-read-more-btn:hover {
+  background: #fbe6c6;
+  border-color: #f8cb92;
+}
+
+.quick-read-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  text-align: center;
+  padding: 2rem;
+  box-sizing: border-box;
+  color: hsl(var(--text-secondary));
+}
+

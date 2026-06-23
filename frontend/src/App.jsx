@@ -3,6 +3,7 @@ import { supabase, logout } from "./supabaseClient";
 import Auth from "./components/Auth";
 import PortfolioUpload from "./components/PortfolioUpload";
 import NewsFeed from "./components/NewsFeed";
+import QuickRead from "./components/QuickRead";
 import { 
   LogOut, 
   Newspaper, 
@@ -18,7 +19,8 @@ import {
   Trash2,
   Sun,
   Moon,
-  Share2
+  Share2,
+  Zap
 } from "lucide-react";
 
 export default function App() {
@@ -29,6 +31,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("home"); // home, market, portfolio, profile
   const [searchTerm, setSearchTerm] = useState("");
+  const [indices, setIndices] = useState(null);
+  const [indicesLoading, setIndicesLoading] = useState(false);
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem("portfolio-theme") || "dark";
   });
@@ -146,6 +150,33 @@ export default function App() {
     fetchSavedArticlesDetails();
   }, [savedArticles, user]);
 
+  // Fetch real-time market indices
+  useEffect(() => {
+    if (activeTab !== "market") return;
+
+    const fetchIndices = async () => {
+      setIndicesLoading(true);
+      try {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-indices`, {
+          headers: {
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+        });
+        if (!response.ok) throw new Error("Failed to fetch indices");
+        const data = await response.json();
+        setIndices(data);
+      } catch (err) {
+        console.error("Error fetching market indices:", err.message);
+      } finally {
+        setIndicesLoading(false);
+      }
+    };
+
+    fetchIndices();
+    const interval = setInterval(fetchIndices, 60000); // refresh every 60 seconds
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
   const handleUploadSuccess = (newHoldings) => {
     setHoldings(newHoldings);
     setActiveTab("home"); // Automatically switch to home to show news
@@ -260,7 +291,7 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="main-content-scrollable">
+      <main className={activeTab === "quick-read" ? "main-content-quick-read" : "main-content-scrollable"}>
         
         {/* Render Tab Contents */}
         {activeTab === "home" && (
@@ -321,77 +352,101 @@ export default function App() {
           <>
             {/* Market Highlights & Index Widget */}
             <div className="market-indices-container">
-              <div className="index-card">
-                <div className="index-header">
-                  <span className="index-name">NIFTY 50</span>
-                  <span className="index-badge positive">+1.24%</span>
-                </div>
-                <div className="index-value">23,456.80</div>
-                <div className="index-footer">NSE India</div>
-              </div>
-              
-              <div className="index-card">
-                <div className="index-header">
-                  <span className="index-name">SENSEX</span>
-                  <span className="index-badge positive">+1.18%</span>
-                </div>
-                <div className="index-value">77,215.10</div>
-                <div className="index-footer">BSE India</div>
-              </div>
+              {indices ? (
+                indices.map((idx, index) => {
+                  const isPositive = idx.change >= 0;
+                  const badgeClass = `index-badge ${isPositive ? "positive" : "negative"}`;
+                  const badgeText = `${isPositive ? "+" : ""}${idx.changePercent ? idx.changePercent.toFixed(2) : "0.00"}%`;
+                  const formattedValue = idx.price !== null && idx.price !== undefined
+                    ? idx.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    : "—";
 
-              <div className="index-card">
-                <div className="index-header">
-                  <span className="index-name">BANK NIFTY</span>
-                  <span className="index-badge positive">+1.45%</span>
-                </div>
-                <div className="index-value">51,205.40</div>
-                <div className="index-footer">NSE India</div>
-              </div>
+                  return (
+                    <div key={index} className="index-card">
+                      <div className="index-header">
+                        <span className="index-name">{idx.name}</span>
+                        <span className={badgeClass}>{badgeText}</span>
+                      </div>
+                      <div className="index-value">{formattedValue}</div>
+                      <div className="index-footer">{idx.footer}</div>
+                    </div>
+                  );
+                })
+              ) : (
+                <>
+                  <div className="index-card skeleton-loading">
+                    <div className="index-header">
+                      <span className="index-name">NIFTY 50</span>
+                      <span className="index-badge positive">+1.24%</span>
+                    </div>
+                    <div className="index-value">23,456.80</div>
+                    <div className="index-footer">NSE India</div>
+                  </div>
+                  
+                  <div className="index-card skeleton-loading">
+                    <div className="index-header">
+                      <span className="index-name">SENSEX</span>
+                      <span className="index-badge positive">+1.18%</span>
+                    </div>
+                    <div className="index-value">77,215.10</div>
+                    <div className="index-footer">BSE India</div>
+                  </div>
 
-              <div className="index-card">
-                <div className="index-header">
-                  <span className="index-name">MIDCAP 100</span>
-                  <span className="index-badge positive">+0.85%</span>
-                </div>
-                <div className="index-value">52,410.20</div>
-                <div className="index-footer">NSE India</div>
-              </div>
+                  <div className="index-card skeleton-loading">
+                    <div className="index-header">
+                      <span className="index-name">BANK NIFTY</span>
+                      <span className="index-badge positive">+1.45%</span>
+                    </div>
+                    <div className="index-value">51,205.40</div>
+                    <div className="index-footer">NSE India</div>
+                  </div>
 
-              <div className="index-card">
-                <div className="index-header">
-                  <span className="index-name">SMALLCAP 100</span>
-                  <span className="index-badge positive">+0.95%</span>
-                </div>
-                <div className="index-value">16,845.60</div>
-                <div className="index-footer">NSE India</div>
-              </div>
+                  <div className="index-card skeleton-loading">
+                    <div className="index-header">
+                      <span className="index-name">MIDCAP 100</span>
+                      <span className="index-badge positive">+0.85%</span>
+                    </div>
+                    <div className="index-value">52,410.20</div>
+                    <div className="index-footer">NSE India</div>
+                  </div>
 
-              <div className="index-card">
-                <div className="index-header">
-                  <span className="index-name">S&P 500</span>
-                  <span className="index-badge positive">+0.25%</span>
-                </div>
-                <div className="index-value">5,473.17</div>
-                <div className="index-footer">US Markets</div>
-              </div>
+                  <div className="index-card skeleton-loading">
+                    <div className="index-header">
+                      <span className="index-name">SMALLCAP 100</span>
+                      <span className="index-badge positive">+0.95%</span>
+                    </div>
+                    <div className="index-value">16,845.60</div>
+                    <div className="index-footer">NSE India</div>
+                  </div>
 
-              <div className="index-card">
-                <div className="index-header">
-                  <span className="index-name">NASDAQ</span>
-                  <span className="index-badge positive">+0.35%</span>
-                </div>
-                <div className="index-value">17,722.66</div>
-                <div className="index-footer">US Markets</div>
-              </div>
+                  <div className="index-card skeleton-loading">
+                    <div className="index-header">
+                      <span className="index-name">S&P 500</span>
+                      <span className="index-badge positive">+0.25%</span>
+                    </div>
+                    <div className="index-value">5,473.17</div>
+                    <div className="index-footer">US Markets</div>
+                  </div>
 
-              <div className="index-card">
-                <div className="index-header">
-                  <span className="index-name">DOW JONES</span>
-                  <span className="index-badge negative">-0.15%</span>
-                </div>
-                <div className="index-value">39,150.30</div>
-                <div className="index-footer">US Markets</div>
-              </div>
+                  <div className="index-card skeleton-loading">
+                    <div className="index-header">
+                      <span className="index-name">NASDAQ</span>
+                      <span className="index-badge positive">+0.35%</span>
+                    </div>
+                    <div className="index-value">17,722.66</div>
+                    <div className="index-footer">US Markets</div>
+                  </div>
+
+                  <div className="index-card skeleton-loading">
+                    <div className="index-header">
+                      <span className="index-name">DOW JONES</span>
+                      <span className="index-badge negative">-0.15%</span>
+                    </div>
+                    <div className="index-value">39,150.30</div>
+                    <div className="index-footer">US Markets</div>
+                  </div>
+                </>
+              )}
             </div>
             <NewsFeed 
               holdings={holdings} 
@@ -400,6 +455,15 @@ export default function App() {
               onToggleBookmark={handleToggleBookmark}
             />
           </>
+        )}
+
+        {activeTab === "quick-read" && (
+          <QuickRead 
+            holdings={holdings}
+            savedArticleIds={savedArticles}
+            onToggleBookmark={handleToggleBookmark}
+            setActiveTab={setActiveTab}
+          />
         )}
 
         {activeTab === "portfolio" && (
@@ -523,6 +587,14 @@ export default function App() {
         >
           <TrendingUp size={18} />
           <span>Market</span>
+        </button>
+        
+        <button 
+          onClick={() => setActiveTab("quick-read")} 
+          className={`nav-item ${activeTab === "quick-read" ? "active" : ""}`}
+        >
+          <Zap size={18} />
+          <span>Quick Read</span>
         </button>
         
         <button 
