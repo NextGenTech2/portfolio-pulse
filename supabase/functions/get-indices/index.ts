@@ -15,7 +15,7 @@ const SYMBOLS_MAP: Record<string, IndexInfo> = {
   "^NSEI": { name: "NIFTY 50", footer: "NSE India" },
   "^BSESN": { name: "SENSEX", footer: "BSE India" },
   "^NSEBANK": { name: "BANK NIFTY", footer: "NSE India" },
-  "^CRSMID": { name: "MIDCAP 100", footer: "NSE India" },
+  "^CNXMID": { name: "CNX MIDCAP", footer: "NSE India" },
   "^CNXSC": { name: "SMALLCAP 100", footer: "NSE India" },
   "^GSPC": { name: "S&P 500", footer: "US Markets" },
   "^IXIC": { name: "NASDAQ", footer: "US Markets" },
