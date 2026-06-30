@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import PullToRefresh from "pulltorefreshjs";
 import { supabase, logout } from "./supabaseClient";
 import Auth from "./components/Auth";
 import PortfolioUpload from "./components/PortfolioUpload";
@@ -594,6 +595,21 @@ export default function App() {
   const toggleTheme = () => {
     setTheme(prev => prev === "dark" ? "light" : "dark");
   };
+
+  // Initialize PullToRefresh
+  useEffect(() => {
+    PullToRefresh.init({
+      mainElement: '.app-container',
+      triggerElement: '.main-content-scrollable',
+      onRefresh() {
+        window.location.reload(true);
+      }
+    });
+
+    return () => {
+      PullToRefresh.destroyAll();
+    };
+  }, []);
 
   // Listen to Authentication state changes in Supabase
   useEffect(() => {

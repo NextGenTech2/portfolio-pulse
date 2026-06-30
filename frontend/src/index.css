@@ -75,7 +75,6 @@ body {
   display: flex;
   flex-direction: column;
   background-color: var(--body-bg);
-  overflow-x: hidden;
 }
 
 #root {

@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.39.8",
     "lucide-react": "^0.331.0",
     "papaparse": "^5.4.1",
+    "pulltorefreshjs": "^0.1.22",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
