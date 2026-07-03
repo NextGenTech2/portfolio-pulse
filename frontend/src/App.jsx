@@ -810,7 +810,7 @@ export default function App() {
       <div className="app-container" style={{ justifyContent: "center", alignItems: "center" }}>
         <div style={{ textAlign: "center" }}>
           <Activity className="spinner" size={28} style={{ color: "hsl(var(--accent-primary))", marginBottom: "1rem" }} />
-          <p style={{ color: "hsl(var(--text-secondary))", fontSize: "0.85rem" }}>Initializing workspace...</p>
+          <p style={{ color: "hsl(var(--text-secondary))", fontSize: "0.85rem" }}>Syncing your Portfolio Pulse...</p>
         </div>
       </div>
     );
