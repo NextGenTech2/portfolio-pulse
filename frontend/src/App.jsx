@@ -919,19 +919,25 @@ export default function App() {
               {indices ? (
                 indices.map((idx, index) => {
                   const isPositive = idx.change >= 0;
-                  const badgeClass = `index-badge ${isPositive ? "positive" : "negative"}`;
-                  const badgeText = `${isPositive ? "+" : ""}${idx.changePercent ? idx.changePercent.toFixed(2) : "0.00"}%`;
                   const formattedValue = idx.price !== null && idx.price !== undefined
                     ? idx.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                     : "—";
+                  const formattedChange = idx.change !== null && idx.change !== undefined
+                    ? `${isPositive ? "+" : ""}${idx.change.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : "—";
+                  const formattedPercent = idx.changePercent !== null && idx.changePercent !== undefined
+                    ? `${isPositive ? "+" : ""}${idx.changePercent.toFixed(2)}%`
+                    : "0.00%";
 
                   return (
                     <div key={index} className="index-card">
                       <div className="index-header">
                         <span className="index-name">{idx.name}</span>
-                        <span className={badgeClass}>{badgeText}</span>
                       </div>
                       <div className="index-value">{formattedValue}</div>
+                      <div className={`index-change ${isPositive ? "positive" : "negative"}`}>
+                        {formattedChange} ({formattedPercent})
+                      </div>
                       <div className="index-footer">{idx.footer}</div>
                     </div>
                   );
@@ -941,99 +947,99 @@ export default function App() {
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
                       <span className="index-name">NIFTY 50</span>
-                      <span className="index-badge positive">+1.24%</span>
                     </div>
                     <div className="index-value">23,824.10</div>
+                    <div className="index-change positive">+292.10 (+1.24%)</div>
                     <div className="index-footer">NSE India</div>
                   </div>
                   
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
                       <span className="index-name">SENSEX</span>
-                      <span className="index-badge positive">+1.18%</span>
                     </div>
                     <div className="index-value">76,200.68</div>
+                    <div className="index-change positive">+888.35 (+1.18%)</div>
                     <div className="index-footer">BSE India</div>
                   </div>
 
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
                       <span className="index-name">NIFTY BANK</span>
-                      <span className="index-badge positive">+1.45%</span>
                     </div>
                     <div className="index-value">57,183.75</div>
+                    <div className="index-change positive">+817.85 (+1.45%)</div>
                     <div className="index-footer">NSE India</div>
                   </div>
 
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
                       <span className="index-name">NIFTY Midcap 100</span>
-                      <span className="index-badge positive">+0.85%</span>
                     </div>
                     <div className="index-value">62,070.35</div>
+                    <div className="index-change positive">+523.65 (+0.85%)</div>
                     <div className="index-footer">NSE India</div>
                   </div>
 
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
                       <span className="index-name">NIFTY NEXT 50</span>
-                      <span className="index-badge positive">+0.95%</span>
                     </div>
                     <div className="index-value">72,068.75</div>
+                    <div className="index-change positive">+678.90 (+0.95%)</div>
                     <div className="index-footer">NSE India</div>
                   </div>
 
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
                       <span className="index-name">NIFTY 100</span>
-                      <span className="index-badge positive">+0.75%</span>
                     </div>
                     <div className="index-value">24,907.80</div>
+                    <div className="index-change positive">+185.35 (+0.75%)</div>
                     <div className="index-footer">NSE India</div>
                   </div>
 
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
                       <span className="index-name">NIFTY Smallcap 100</span>
-                      <span className="index-badge positive">+0.65%</span>
                     </div>
                     <div className="index-value">18,805.90</div>
+                    <div className="index-change positive">+121.50 (+0.65%)</div>
                     <div className="index-footer">NSE India</div>
                   </div>
 
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
                       <span className="index-name">India VIX</span>
-                      <span className="index-badge positive">+1.10%</span>
                     </div>
                     <div className="index-value">13.94</div>
+                    <div className="index-change positive">+0.15 (+1.10%)</div>
                     <div className="index-footer">NSE India</div>
                   </div>
 
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
                       <span className="index-name">S&P 500</span>
-                      <span className="index-badge positive">+0.25%</span>
                     </div>
                     <div className="index-value">5,473.17</div>
+                    <div className="index-change positive">+13.65 (+0.25%)</div>
                     <div className="index-footer">US Markets</div>
                   </div>
 
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
                       <span className="index-name">NASDAQ</span>
-                      <span className="index-badge positive">+0.35%</span>
                     </div>
                     <div className="index-value">17,722.66</div>
+                    <div className="index-change positive">+61.75 (+0.35%)</div>
                     <div className="index-footer">US Markets</div>
                   </div>
 
                   <div className="index-card skeleton-loading">
                     <div className="index-header">
                       <span className="index-name">DOW JONES</span>
-                      <span className="index-badge negative">-0.15%</span>
                     </div>
                     <div className="index-value">39,150.30</div>
+                    <div className="index-change negative">-58.85 (-0.15%)</div>
                     <div className="index-footer">US Markets</div>
                   </div>
                 </>
