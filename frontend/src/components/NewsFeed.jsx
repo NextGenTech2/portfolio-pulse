@@ -146,7 +146,7 @@ export default function NewsFeed({
     }
 
     if (filterMode === "general") {
-      setFilteredNews(news.slice(0, 30));
+      setFilteredNews(news);
       return;
     }
 
