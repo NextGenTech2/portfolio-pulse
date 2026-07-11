@@ -111,7 +111,7 @@ export default function NotificationCenter({ userId }) {
   });
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div>
       <button 
         className="btn-signout" 
         style={{ padding: '0.4rem', position: 'relative' }}
@@ -140,10 +140,10 @@ export default function NotificationCenter({ userId }) {
       {isOpen && (
         <div style={{
           position: 'absolute',
-          top: '120%',
-          right: '-10px',
-          width: '300px',
-          maxWidth: 'calc(100vw - 20px)',
+          top: '70px',
+          right: '15px',
+          width: '320px',
+          maxWidth: 'calc(100vw - 30px)',
           maxHeight: '400px',
           backgroundColor: 'hsl(var(--bg-surface-elevated))',
           backdropFilter: 'blur(16px)',
