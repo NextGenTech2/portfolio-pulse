@@ -108,7 +108,7 @@ export default function NewsFeed({
         .from("news_cache")
         .select("*")
         .order("datetime", { ascending: false })
-        .limit(100);
+        .limit(500);
 
       if (error) throw error;
       setNews(data || []);
@@ -436,10 +436,9 @@ export default function NewsFeed({
                     <div className="premium-card-media">
                       {article.image ? (
                         <img 
-                          src={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/image-proxy?url=${encodeURIComponent(article.image)}`} 
+                          src={article.image} 
                           alt="" 
                           className="news-illustration" 
-                          crossOrigin="anonymous" 
                           onLoad={() => console.log('Image loaded', article.id, article.image)}
                           onError={(e) => {
                             console.error('Image load error', article.image, e);

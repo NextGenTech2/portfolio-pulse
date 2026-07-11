@@ -5,6 +5,7 @@ import Auth from "./components/Auth";
 import PortfolioUpload from "./components/PortfolioUpload";
 import NewsFeed from "./components/NewsFeed";
 import QuickRead from "./components/QuickRead";
+import NotificationCenter from "./components/NotificationCenter";
 import { 
   LogOut, 
   Newspaper, 
@@ -839,6 +840,7 @@ export default function App() {
           <span className="brand-title">Portfolio Feed</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {user && <NotificationCenter userId={user.id} />}
           <button 
             onClick={toggleTheme} 
             className="btn-signout" 

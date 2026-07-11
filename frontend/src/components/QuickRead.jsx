@@ -15,7 +15,7 @@ export default function QuickRead({ holdings, savedArticleIds = [], onToggleBook
         .from("news_cache")
         .select("*")
         .order("datetime", { ascending: false })
-        .limit(100);
+        .limit(500);
 
       if (error) throw error;
       setNews(data || []);
@@ -127,7 +127,7 @@ export default function QuickRead({ holdings, savedArticleIds = [], onToggleBook
       {filteredNews.map((article) => {
         const isBookmarked = savedArticleIds.includes(article.id);
         const imageUrl = article.image 
-          ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/image-proxy?url=${encodeURIComponent(article.image)}`
+          ? article.image
           : null;
 
         return (

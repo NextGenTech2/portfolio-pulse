@@ -7,6 +7,39 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
+const HIGH_PRIORITY = ["wins contract", "order", "merger", "acquisition", "approval", "government", "mou", "manufacturing", "jv", "dividend", "bonus", "stock split", "buyback", "sebi", "earnings", "result", "profit"];
+const LOW_PRIORITY = ["rumour", "may", "could", "exploring", "sources", "reportedly"];
+
+function calculateImportance(text: string) {
+  let score = 5;
+  const lowerText = text.toLowerCase();
+  for (const kw of HIGH_PRIORITY) {
+    if (lowerText.includes(kw)) score += 2;
+  }
+  for (const kw of LOW_PRIORITY) {
+    if (lowerText.includes(kw)) score -= 2;
+  }
+  return Math.max(1, Math.min(10, score));
+}
+
+function getSeverity(score: number) {
+  if (score >= 9) return 'CRITICAL';
+  if (score >= 7) return 'HIGH';
+  if (score >= 4) return 'MEDIUM';
+  return 'LOW';
+}
+
+function getCategories(text: string) {
+  const cats = [];
+  const lowerText = text.toLowerCase();
+  if (lowerText.includes("dividend")) cats.push("Dividend");
+  if (lowerText.includes("merger") || lowerText.includes("acquisition")) cats.push("M&A");
+  if (lowerText.includes("order") || lowerText.includes("contract")) cats.push("Contract");
+  if (lowerText.includes("result") || lowerText.includes("earnings")) cats.push("Results");
+  if (lowerText.includes("bonus") || lowerText.includes("split")) cats.push("Corporate Action");
+  return cats;
+}
+
 // Helper to decode XML entities
 function decodeXmlEntities(str: string): string {
   return str
@@ -18,34 +51,27 @@ function decodeXmlEntities(str: string): string {
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
 }
 
-// Helper to strip HTML tags
 function stripHtmlTags(str: string): string {
   return str.replace(/<[^>]*>/g, "").trim();
 }
 
-// Helper to hash string to a positive bigint-compatible number
-function hashStringToId(str: string): number {
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash * 33) ^ str.charCodeAt(i);
-  }
-  return Math.abs(hash);
+// Generate deterministic event hash
+async function generateEventHash(title: string, dateStr: string): Promise<string> {
+  const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 30);
+  const data = new TextEncoder().encode(`${normalizedTitle}_${dateStr}`);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Helper to fetch and parse any RSS feed (including Google News search and direct feeds)
-async function fetchRssFeed(url: string, category: string, tickersInGroup: string[] = []): Promise<any[]> {
+async function fetchRssFeed(url: string, uniqueHoldings: string[] = []): Promise<any[]> {
   const articles: any[] = [];
   try {
     const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
+      headers: { "User-Agent": "Mozilla/5.0" },
     });
 
-    if (!response.ok) {
-      console.warn(`RSS feed returned status ${response.status} for URL: ${url}`);
-      return [];
-    }
+    if (!response.ok) return [];
 
     const xmlText = await response.text();
     const itemRegex = /<item>([\s\S]*?)<\/item>/g;
@@ -65,128 +91,92 @@ async function fetchRssFeed(url: string, category: string, tickersInGroup: strin
       const pubDateStr = pubDateMatch ? pubDateMatch[1] : "";
       const descriptionRaw = descriptionMatch ? decodeXmlEntities(descriptionMatch[1]) : "";
       
-      // Extract image URL from decoded description or media tags
       let image = "";
       const imgMatch = descriptionRaw.match(/<img[^>]+src=["']([^"']+)["']/i);
-      if (imgMatch) {
-        image = imgMatch[1];
-      } else {
-        // Extract from media:content tag (Livemint format)
+      if (imgMatch) image = imgMatch[1];
+      else {
         const mediaMatch = itemContent.match(/<media:content[^>]+url=["']([^"']+)["']/i);
-        if (mediaMatch) {
-          image = mediaMatch[1];
-        } else {
-          // Extract from media:thumbnail tag (Google News format)
+        if (mediaMatch) image = mediaMatch[1];
+        else {
           const thumbMatch = itemContent.match(/<media:thumbnail[^>]+url=["']([^"']+)["']/i);
-          if (thumbMatch) {
-            image = thumbMatch[1];
-          }
+          if (thumbMatch) image = thumbMatch[1];
         }
       }
       
-      // Strip HTML tags for summary
       const summary = stripHtmlTags(descriptionRaw);
       
-      // Extract source name (Google News contains <source> tag)
       let source = sourceMatch ? decodeXmlEntities(sourceMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1")) : "";
       if (!source) {
-        // Fallback for direct publisher feeds
-        if (link.includes("moneycontrol.com")) {
-          source = "Moneycontrol";
-        } else if (link.includes("livemint.com")) {
-          source = "Livemint";
-        } else if (link.includes("economictimes")) {
-          source = "Economic Times";
-        } else {
-          source = "Indian Business News";
-        }
+        if (link.includes("moneycontrol.com")) source = "Moneycontrol";
+        else if (link.includes("livemint.com")) source = "Livemint";
+        else if (link.includes("economictimes")) source = "Economic Times";
+        else source = "Indian Business News";
       }
 
-      const id = hashStringToId(link);
       let datetime = pubDateStr ? Math.floor(Date.parse(pubDateStr) / 1000) : Math.floor(Date.now() / 1000);
-      if (isNaN(datetime) || datetime <= 0) {
-        datetime = Math.floor(Date.now() / 1000);
-      }
+      if (isNaN(datetime) || datetime <= 0) datetime = Math.floor(Date.now() / 1000);
+      
+      // We group events occurring on the same day for deduplication
+      const dateString = new Date(datetime * 1000).toISOString().split('T')[0];
+      const event_hash = await generateEventHash(title, dateString);
 
-      // Check if it matches user's holdings
-      let related = "";
-      if (tickersInGroup.length > 0) {
-        const matchedTickers = tickersInGroup.filter((ticker) => {
-          const regex = new RegExp(`\\b${ticker}\\b`, "i");
-          return regex.test(title) || regex.test(summary);
-        });
-        if (matchedTickers.length === 0) {
-          continue;
+      // Extract symbols for portfolio matching
+      const mentioned_symbols: string[] = [];
+      for (const sym of uniqueHoldings) {
+        const regex = new RegExp(`\\b${sym}\\b`, "i");
+        if (regex.test(title) || regex.test(summary)) {
+          mentioned_symbols.push(sym);
         }
-        related = matchedTickers.join(",");
       }
 
       articles.push({
-        id,
+        id: event_hash, // use hash as ID
+        event_hash,
         headline: title,
         summary,
         source,
         url: link,
-        datetime,
-        related,
-        category,
-        image,
+        published_at: new Date(datetime * 1000).toISOString(),
+        image_url: image,
+        mentioned_symbols,
+        categories: getCategories(`${title} ${summary}`)
       });
     }
   } catch (err: any) {
-    console.error(`Failed to fetch RSS feed for URL ${url}:`, err.message);
+    console.error(`Failed to fetch RSS:`, err.message);
   }
   return articles;
 }
 
 serve(async (req) => {
-  // Handle CORS preflight request
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const finnhubKey = Deno.env.get("FINNHUB_API_KEY");
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const allRecords: any[] = [];
 
-    // --- Part 1: Fetch Global Finnhub News (Macro) ---
-    if (finnhubKey) {
-      try {
-        console.log("Fetching global news from Finnhub...");
-        const finnhubUrl = `https://finnhub.io/api/v1/news?category=general&token=${finnhubKey}`;
-        const response = await fetch(finnhubUrl);
-        if (response.ok) {
-          const articles = await response.json();
-          if (Array.isArray(articles)) {
-            articles.forEach((article: any) => {
-              allRecords.push({
-                id: article.id,
-                headline: article.headline || "",
-                summary: article.summary || "",
-                source: article.source || "",
-                url: article.url || "",
-                // Ensure datetime is a valid number; fallback to now if missing/invalid
-                datetime: typeof article.datetime === 'number' && !isNaN(article.datetime)
-                  ? article.datetime
-                  : Math.floor(Date.now() / 1000),
-                related: article.related || "",
-                category: article.category || "general",
-                image: article.image || "",
-              });
-            });
-            console.log(`Aggregated ${articles.length} articles from Finnhub.`);
-          }
+    // Retrieve unique user holdings from database profiles
+    const { data: profiles, error: profilesError } = await supabase.from("profiles").select("holdings");
+    const uniqueHoldings = new Set<string>();
+    
+    if (profiles) {
+      profiles.forEach((p: any) => {
+        if (p.holdings && Array.isArray(p.holdings)) {
+          p.holdings.forEach((h: string) => {
+            const clean = h.replace(/\.(NS|BO)$/i, "").trim().toUpperCase();
+            if (clean && clean.length > 1) uniqueHoldings.add(clean);
+          });
         }
-      } catch (err: any) {
-        console.error("Finnhub fetch error:", err.message);
-      }
+      });
     }
+    const uniqueHoldingsArr = Array.from(uniqueHoldings);
 
-    // List of direct Indian RSS feeds
+    // Fetch Feeds
     const directFeeds = [
       "https://www.moneycontrol.com/rss/latestnews.xml",
       "https://www.moneycontrol.com/rss/buzzingstocks.xml",
@@ -194,102 +184,89 @@ serve(async (req) => {
       "https://www.livemint.com/rss/companies"
     ];
 
-    // --- Part 2: Fetch Indian General Market Business News (Google News & Direct Feeds) ---
-    console.log("Fetching Indian Business news from RSS feeds...");
-    const generalNewsPromises: Promise<any[]>[] = [];
+    const feedPromises = directFeeds.map(url => fetchRssFeed(url, uniqueHoldingsArr));
     
-    // 1. Google News general search (aggregates from many sources)
-    const googleGeneralUrl = `https://news.google.com/rss/search?q=${encodeURIComponent("Indian stock market OR Sensex OR Nifty business when:3d")}&hl=en-IN&gl=IN&ceid=IN:en`;
-    generalNewsPromises.push(fetchRssFeed(googleGeneralUrl, "indian-market"));
-    
-    // 2. Direct feeds
-    directFeeds.forEach(url => {
-      generalNewsPromises.push(fetchRssFeed(url, "indian-market"));
-    });
-
-    const generalNewsResults = await Promise.all(generalNewsPromises);
-    const generalNewsArticles = generalNewsResults.flat();
-    allRecords.push(...generalNewsArticles);
-    console.log(`Aggregated ${generalNewsArticles.length} Indian general market articles.`);
-
-    // --- Part 3: Fetch Company-Specific News for User Holdings ---
-    console.log("Retrieving unique user holdings from database profiles...");
-    const { data: profiles, error: profilesError } = await supabase
-      .from("profiles")
-      .select("holdings");
-
-    if (profilesError) {
-      console.error("Error loading profiles to fetch holdings:", profilesError.message);
-    } else if (profiles) {
-      const holdingsSet = new Set<string>();
-      profiles.forEach((p: any) => {
-        if (p.holdings && Array.isArray(p.holdings)) {
-          p.holdings.forEach((h: string) => {
-            const clean = h.replace(/\.(NS|BO)$/i, "").trim().toUpperCase();
-            if (clean && clean.length > 1 && /^[A-Z0-9\-]+$/.test(clean)) {
-              holdingsSet.add(clean);
-            }
-          });
-        }
-      });
-
-      const uniqueHoldings = Array.from(holdingsSet);
-      console.log(`Found ${uniqueHoldings.length} unique holdings:`, uniqueHoldings);
-
-      if (uniqueHoldings.length > 0) {
-        console.log("Fetching RSS feeds for portfolio matching...");
-        const companyNewsPromises: Promise<any[]>[] = [];
-        
-        // 1. Google News search for holdings (provides results from many different sources)
-        const chunkSize = 10;
-        for (let i = 0; i < uniqueHoldings.length; i += chunkSize) {
-          const chunk = uniqueHoldings.slice(i, i + chunkSize);
-          const query = `(${chunk.join(" OR ")}) India business when:7d`;
-          const googleSearchUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`;
-          companyNewsPromises.push(fetchRssFeed(googleSearchUrl, "indian-holdings", chunk));
-        }
-
-        // 2. Direct feeds filtered in-memory for holdings
-        directFeeds.forEach(url => {
-          companyNewsPromises.push(fetchRssFeed(url, "indian-holdings", uniqueHoldings));
-        });
-
-        const companyNewsResults = await Promise.all(companyNewsPromises);
-        const companyNewsArticles = companyNewsResults.flat();
-        allRecords.push(...companyNewsArticles);
-        console.log(`Aggregated ${companyNewsArticles.length} articles matching specific portfolio holdings.`);
-      }
+    // Add google news search for holdings
+    const chunkSize = 10;
+    for (let i = 0; i < uniqueHoldingsArr.length; i += chunkSize) {
+      const chunk = uniqueHoldingsArr.slice(i, i + chunkSize);
+      const query = `(${chunk.join(" OR ")}) India business when:3d`;
+      const googleSearchUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`;
+      feedPromises.push(fetchRssFeed(googleSearchUrl, uniqueHoldingsArr));
     }
 
-    // --- Part 4: Upsert to database ---
+    const results = await Promise.all(feedPromises);
+    allRecords.push(...results.flat());
+
     if (allRecords.length > 0) {
-      // De-duplicate records by ID before upserting
+      // Deduplicate before insert
       const uniqueRecordsMap = new Map();
-      allRecords.forEach(r => uniqueRecordsMap.set(r.id, r));
+      allRecords.forEach(r => uniqueRecordsMap.set(r.event_hash, r));
       const uniqueRecords = Array.from(uniqueRecordsMap.values());
 
-      console.log(`Upserting ${uniqueRecords.length} total aggregated articles into PostgreSQL news_cache...`);
-      const { error: upsertError } = await supabase
-        .from("news_cache")
-        .upsert(uniqueRecords, { onConflict: "id" });
+      // Upsert into news_articles and return ONLY newly inserted rows
+      // Note: Supabase JS doesn't easily return *only* new rows on upsert with DO NOTHING in PostgREST natively unless we check them.
+      // So we'll fetch existing hashes first.
+      const hashes = uniqueRecords.map(r => r.event_hash);
+      const { data: existing } = await supabase
+        .from("news_articles")
+        .select("event_hash")
+        .in("event_hash", hashes);
 
-      if (upsertError) {
-        throw upsertError;
+      const existingHashes = new Set(existing?.map(e => e.event_hash) || []);
+      const newArticles = uniqueRecords.filter(r => !existingHashes.has(r.event_hash));
+
+      if (newArticles.length > 0) {
+        console.log(`Inserting ${newArticles.length} new articles into news_articles...`);
+        await supabase.from("news_articles").insert(newArticles);
+
+        // Process Rule Engine for new articles
+        console.log(`Processing Rule Engine for ${newArticles.length} new articles...`);
+        const notificationsToInsert: any[] = [];
+
+        for (const article of newArticles) {
+          if (article.mentioned_symbols && article.mentioned_symbols.length > 0) {
+            for (const sym of article.mentioned_symbols) {
+              // Find users who hold this symbol
+              const { data: usersHolding } = await supabase.rpc('get_users_holding', { search_symbol: sym });
+              
+              if (usersHolding && usersHolding.length > 0) {
+                const textTarget = `${article.headline} ${article.summary}`;
+                let importanceScore = calculateImportance(textTarget) + 2; // +2 for portfolio relevance
+                importanceScore = Math.min(10, importanceScore);
+                const severity = getSeverity(importanceScore);
+                
+                usersHolding.forEach((u: any) => {
+                  notificationsToInsert.push({
+                    user_id: u.id,
+                    notification_type: 'PORTFOLIO',
+                    title: article.headline,
+                    summary: article.summary,
+                    stock_symbol: sym,
+                    source: article.source,
+                    action_url: article.url,
+                    importance: importanceScore,
+                    severity: severity,
+                    categories: article.categories,
+                    reasoning: {
+                      reason: `${sym} is in your portfolio`,
+                      score_breakdown: `Keyword + Portfolio Relevance`
+                    }
+                  });
+                });
+              }
+            }
+          }
+        }
+
+        if (notificationsToInsert.length > 0) {
+          console.log(`Creating ${notificationsToInsert.length} notifications...`);
+          await supabase.from("notifications").insert(notificationsToInsert);
+          // Note: In real life we would trigger the push-worker edge function here via webhooks or another fetch call.
+        }
+      } else {
+        console.log("No new articles to process.");
       }
-      console.log(`Successfully upserted ${uniqueRecords.length} articles.`);
-    }
-
-    // --- Part 5: Prune Old news_cache ---
-    const threeDaysAgoSeconds = Math.floor(Date.now() / 1000) - (3 * 24 * 60 * 60);
-    const { error: deleteError } = await supabase
-      .from("news_cache")
-      .delete()
-      .lt("datetime", threeDaysAgoSeconds);
-
-    if (deleteError) {
-      console.warn("Non-blocking pruning error:", deleteError.message);
-    } else {
-      console.log("Successfully pruned news cache older than 3 days.");
     }
 
     return new Response(JSON.stringify({ success: true, count: allRecords.length }), {
