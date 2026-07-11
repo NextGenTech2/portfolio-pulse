@@ -141,8 +141,9 @@ export default function NotificationCenter({ userId }) {
         <div style={{
           position: 'absolute',
           top: '120%',
-          right: 0,
-          width: '320px',
+          right: '-10px',
+          width: '300px',
+          maxWidth: 'calc(100vw - 20px)',
           maxHeight: '400px',
           backgroundColor: 'hsl(var(--bg-surface-elevated))',
           backdropFilter: 'blur(16px)',
