@@ -105,9 +105,9 @@ export default function NewsFeed({
     if (!isManualRefresh) setLoading(true);
     try {
       const { data, error } = await supabase
-        .from("news_cache")
+        .from("news_articles")
         .select("*")
-        .order("datetime", { ascending: false })
+        .order("published_at", { ascending: false })
         .limit(500);
 
       if (error) throw error;
@@ -162,8 +162,8 @@ export default function NewsFeed({
 
     const matches = news.filter(article => {
       // 1. Check direct Finnhub related tag or Deno custom populated related column
-      if (article.related) {
-        const relatedList = article.related.split(",").map(r => r.trim().toUpperCase());
+      if (article.mentioned_symbols && Array.isArray(article.mentioned_symbols)) {
+        const relatedList = article.mentioned_symbols.map(r => r.trim().toUpperCase());
         if (cleanedHoldings.some(h => relatedList.includes(h.base))) {
           return true;
         }
@@ -182,8 +182,8 @@ export default function NewsFeed({
     const enrichedMatches = matches.map(article => {
       const matchedHoldings = cleanedHoldings
         .filter(h => {
-          if (article.related) {
-            const relatedList = article.related.split(",").map(r => r.trim().toUpperCase());
+          if (article.mentioned_symbols && Array.isArray(article.mentioned_symbols)) {
+            const relatedList = article.mentioned_symbols.map(r => r.trim().toUpperCase());
             if (relatedList.includes(h.base)) return true;
           }
           const searchTarget = `${article.headline} ${article.summary}`.toUpperCase();
@@ -254,9 +254,12 @@ export default function NewsFeed({
     }
   };
 
-  const formatTime = (seconds) => {
-    if (!seconds) return "";
-    const ms = Number(seconds) * 1000;
+  const formatTime = (timeValue) => {
+    if (!timeValue) return "";
+    let ms = Number(timeValue) * 1000;
+    if (isNaN(ms) && typeof timeValue === 'string') {
+      ms = Date.parse(timeValue);
+    }
     const diffMs = Date.now() - ms;
     const diffMins = Math.floor(diffMs / (60 * 1000));
     const diffHours = Math.floor(diffMs / (60 * 60 * 1000));
@@ -434,21 +437,21 @@ export default function NewsFeed({
                   {/* Left Column: Image */}
                   <div className="premium-card-left">
                     <div className="premium-card-media">
-                      {article.image ? (
+                      {article.image_url ? (
                         <img 
-                          src={article.image} 
+                          src={article.image_url} 
                           alt="" 
                           className="news-illustration" 
-                          onLoad={() => console.log('Image loaded', article.id, article.image)}
+                          onLoad={() => console.log('Image loaded', article.id, article.image_url)}
                           onError={(e) => {
-                            console.error('Image load error', article.image, e);
+                            console.error('Image load error', article.image_url, e);
                             e.target.style.display = "none";
                             const next = e.target.nextSibling;
                             if (next) next.style.display = "block";
                           }}
                         />
                       ) : null}
-                      <div style={{ display: article.image ? "none" : "block", width: "100%", height: "100%" }}>
+                      <div style={{ display: article.image_url ? "none" : "block", width: "100%", height: "100%" }}>
                         {renderFallbackIllustration(article.headline, article.summary)}
                       </div>
                     </div>
@@ -465,7 +468,7 @@ export default function NewsFeed({
                       {getSourceIcon(article.source)}
                       <span className="source-name">{article.source}</span>
                       <span className="divider-dot">•</span>
-                      <span className="article-time">{formatTime(article.datetime)}</span>
+                      <span className="article-time">{formatTime(article.published_at)}</span>
                       {article.matchedHoldings && article.matchedHoldings.length > 0 && (
                         <span className="stock-tag-inline">
                           {article.matchedHoldings[0].replace(/\.(NS|BO)$/i, "").toUpperCase()}
