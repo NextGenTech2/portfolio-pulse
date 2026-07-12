@@ -50,6 +50,93 @@ const getStockPriceForTicker = (ticker = "") => {
   };
 };
 
+const getJaccardSimilarity = (str1, str2) => {
+  const tokenize = (str) => {
+    const words = str.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/);
+    const stopWords = new Set(["the", "and", "to", "of", "a", "in", "for", "on", "with", "is", "at", "by", "from", "as", "it", "that"]);
+    return new Set(words.filter(w => w.length > 2 && !stopWords.has(w)));
+  };
+  
+  const set1 = tokenize(str1);
+  const set2 = tokenize(str2);
+  
+  let intersection = 0;
+  for (let word of set1) {
+    if (set2.has(word)) intersection++;
+  }
+  
+  const union = set1.size + set2.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+};
+
+const clusterArticles = (articles) => {
+  const clusters = [];
+  
+  for (const article of articles) {
+    let addedToCluster = false;
+    const articleTime = Date.parse(article.published_at);
+    const primaryHolding = article.matchedHoldings && article.matchedHoldings.length > 0 ? article.matchedHoldings[0] : null;
+
+    for (const cluster of clusters) {
+      if (primaryHolding && cluster.primaryHolding !== primaryHolding) continue;
+      
+      const clusterTime = Date.parse(cluster.mainArticle.published_at);
+      const hoursDiff = Math.abs(clusterTime - articleTime) / (1000 * 60 * 60);
+      if (hoursDiff > 48) continue;
+      
+      const similarity = getJaccardSimilarity(cluster.mainArticle.headline, article.headline);
+      if (similarity > 0.12) { 
+        cluster.relatedArticles.push(article);
+        addedToCluster = true;
+        break;
+      }
+    }
+    
+    if (!addedToCluster) {
+      clusters.push({
+        id: article.id,
+        primaryHolding,
+        mainArticle: article,
+        relatedArticles: []
+      });
+    }
+  }
+  
+  // Only keep clusters grouped if they have at least 3 similar articles in total (1 main + 2 or more related)
+  const finalClusters = [];
+  for (const cluster of clusters) {
+    if (cluster.relatedArticles.length >= 2) {
+      finalClusters.push(cluster);
+    } else {
+      // Flatten the cluster into individual standalone articles
+      finalClusters.push({
+        id: cluster.mainArticle.id,
+        primaryHolding: cluster.primaryHolding,
+        mainArticle: cluster.mainArticle,
+        relatedArticles: []
+      });
+      for (const rel of cluster.relatedArticles) {
+        const relHolding = rel.matchedHoldings && rel.matchedHoldings.length > 0 ? rel.matchedHoldings[0] : null;
+        finalClusters.push({
+          id: rel.id,
+          primaryHolding: relHolding,
+          mainArticle: rel,
+          relatedArticles: []
+        });
+      }
+    }
+  }
+
+  // Sort final clusters chronologically (newest published_at first)
+  finalClusters.sort((a, b) => {
+    const timeA = Date.parse(a.mainArticle.published_at);
+    const timeB = Date.parse(b.mainArticle.published_at);
+    return timeB - timeA;
+  });
+  
+  return finalClusters;
+};
+
 export default function NewsFeed({ 
   holdings, 
   filterMode = "curated", 
@@ -146,7 +233,7 @@ export default function NewsFeed({
     }
 
     if (filterMode === "general") {
-      setFilteredNews(news);
+      setFilteredNews(clusterArticles(news));
       return;
     }
 
@@ -199,7 +286,7 @@ export default function NewsFeed({
       };
     });
 
-    setFilteredNews(enrichedMatches);
+    setFilteredNews(clusterArticles(enrichedMatches));
   }, [news, holdings, filterMode]);
 
   // Pull-to-refresh Touch Handlers
@@ -420,85 +507,118 @@ export default function NewsFeed({
             <span className="feed-subtitle">({filteredNews.length} Articles)</span>
           </div>
 
-          {filteredNews.map((article, index) => {
+          {filteredNews.map((cluster, index) => {
+            const article = cluster.mainArticle;
             const isFeatured = index === 0 && filterMode === "curated";
             const isBookmarked = savedArticleIds.includes(article.id);
             const sentiment = getSentiment(article.headline, article.summary);
 
             return (
-              <a 
-                key={article.id} 
-                href={article.url} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className={`news-card ${isFeatured ? "featured" : "regular"}`}
-              >
-                <div className="premium-card-inner">
-                  {/* Left Column: Image */}
-                  <div className="premium-card-left">
-                    <div className="premium-card-media">
-                      {article.image_url ? (
-                        <img 
-                          src={article.image_url} 
-                          alt="" 
-                          className="news-illustration" 
-                          onLoad={() => console.log('Image loaded', article.id, article.image_url)}
-                          onError={(e) => {
-                            console.error('Image load error', article.image_url, e);
-                            e.target.style.display = "none";
-                            const next = e.target.nextSibling;
-                            if (next) next.style.display = "block";
-                          }}
-                        />
-                      ) : null}
-                      <div style={{ display: article.image_url ? "none" : "block", width: "100%", height: "100%" }}>
-                        {renderFallbackIllustration(article.headline, article.summary)}
+              <div key={cluster.id} className="story-cluster-container">
+                <a 
+                  href={article.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className={`news-card ${isFeatured ? "featured" : "regular"}`}
+                >
+                  <div className="premium-card-inner">
+                    {/* Left Column: Image */}
+                    <div className="premium-card-left">
+                      <div className="premium-card-media">
+                        {article.image_url ? (
+                          <img 
+                            src={article.image_url} 
+                            alt="" 
+                            className="news-illustration" 
+                            onLoad={(e) => {
+                              if (e.target.naturalWidth <= 1 && e.target.naturalHeight <= 1) {
+                                // Handle 1x1 spacer/placeholder images from archived/deleted source images
+                                e.target.style.display = "none";
+                                const next = e.target.nextSibling;
+                                if (next) next.style.display = "block";
+                              } else {
+                                console.log('Image loaded', article.id, article.image_url);
+                              }
+                            }}
+                            onError={(e) => {
+                              console.error('Image load error', article.image_url, e);
+                              e.target.style.display = "none";
+                              const next = e.target.nextSibling;
+                              if (next) next.style.display = "block";
+                            }}
+                          />
+                        ) : null}
+                        <div style={{ display: article.image_url ? "none" : "block", width: "100%", height: "100%" }}>
+                          {renderFallbackIllustration(article.headline, article.summary)}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Right Column: Headline, Summary, Bottom details */}
-                  <div className="premium-card-middle">
-                    <h3 className="news-headline">{article.headline}</h3>
+                    {/* Right Column: Headline, Summary, Bottom details */}
+                    <div className="premium-card-middle">
+                      <h3 className="news-headline">{article.headline}</h3>
 
-                    {article.summary && (
-                      <p className="news-summary">{article.summary}</p>
-                    )}
-                    <div className="publisher-meta-row">
-                      {getSourceIcon(article.source)}
-                      <span className="source-name">{article.source}</span>
-                      <span className="divider-dot">•</span>
-                      <span className="article-time">{formatTime(article.published_at)}</span>
-                      {article.matchedHoldings && article.matchedHoldings.length > 0 && (
-                        <span className="stock-tag-inline">
-                          {article.matchedHoldings[0].replace(/\.(NS|BO)$/i, "").toUpperCase()}
-                        </span>
+                      {article.summary && (
+                        <p className="news-summary">{article.summary}</p>
                       )}
-                      <div className="premium-card-actions-inline">
-                        <button 
-                          className={`btn-card-action-mini bookmark ${isBookmarked ? "active" : ""}`}
-                          onClick={(e) => toggleBookmark(e, article.id)}
-                          title={isBookmarked ? "Remove Bookmark" : "Save Article"}
-                        >
-                          <Bookmark size={13} fill={isBookmarked ? "currentColor" : "none"} />
-                        </button>
-                        <button 
-                          className="btn-card-action-mini share"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            navigator.clipboard.writeText(article.url);
-                            alert("Article link copied to clipboard!");
-                          }}
-                          title="Share Article"
-                        >
-                          <Share2 size={13} />
-                        </button>
+                      <div className="publisher-meta-row">
+                        {getSourceIcon(article.source)}
+                        <span className="source-name">{article.source}</span>
+                        <span className="divider-dot">•</span>
+                        <span className="article-time">{formatTime(article.published_at)}</span>
+                        {article.matchedHoldings && article.matchedHoldings.length > 0 && (
+                          <span className="stock-tag-inline">
+                            {article.matchedHoldings[0].replace(/\.(NS|BO)$/i, "").toUpperCase()}
+                          </span>
+                        )}
+                        <div className="premium-card-actions-inline">
+                          <button 
+                            className={`btn-card-action-mini bookmark ${isBookmarked ? "active" : ""}`}
+                            onClick={(e) => toggleBookmark(e, article.id)}
+                            title={isBookmarked ? "Remove Bookmark" : "Save Article"}
+                          >
+                            <Bookmark size={13} fill={isBookmarked ? "currentColor" : "none"} />
+                          </button>
+                          <button 
+                            className="btn-card-action-mini share"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(article.url);
+                              alert("Article link copied to clipboard!");
+                            }}
+                            title="Share Article"
+                          >
+                            <Share2 size={13} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </a>
+                </a>
+
+                {/* Related Articles Carousel */}
+                {cluster.relatedArticles.length > 0 && (
+                  <div className="related-articles-carousel">
+                    {cluster.relatedArticles.map(related => (
+                      <a 
+                        key={related.id} 
+                        href={related.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="related-mini-card"
+                      >
+                        <div className="related-mini-card-header">
+                          {getSourceIcon(related.source)}
+                          <span className="source-name">{related.source}</span>
+                          <span className="article-time">{formatTime(related.published_at)}</span>
+                        </div>
+                        <h4 className="related-mini-card-headline">{related.headline}</h4>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
