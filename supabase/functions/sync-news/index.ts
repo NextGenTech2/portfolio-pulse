@@ -269,6 +269,18 @@ serve(async (req) => {
       }
     }
 
+    // Prune articles older than 3 days
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    console.log(`Pruning articles older than ${threeDaysAgo}...`);
+    const { error: pruneError } = await supabase
+      .from("news_articles")
+      .delete()
+      .lt("published_at", threeDaysAgo);
+    
+    if (pruneError) {
+      console.error("Prune news articles error:", pruneError.message);
+    }
+
     return new Response(JSON.stringify({ success: true, count: allRecords.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

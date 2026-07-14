@@ -191,9 +191,11 @@ export default function NewsFeed({
   const fetchCachedNews = async (isManualRefresh = false) => {
     if (!isManualRefresh) setLoading(true);
     try {
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
       const { data, error } = await supabase
         .from("news_articles")
         .select("*")
+        .gte("published_at", threeDaysAgo)
         .order("published_at", { ascending: false })
         .limit(500);
 

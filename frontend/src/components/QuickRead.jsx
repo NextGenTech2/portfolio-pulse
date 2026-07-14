@@ -11,10 +11,12 @@ export default function QuickRead({ holdings, savedArticleIds = [], onToggleBook
   const fetchCachedNews = async () => {
     setLoading(true);
     try {
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
       const { data, error } = await supabase
-        .from("news_cache")
+        .from("news_articles")
         .select("*")
-        .order("datetime", { ascending: false })
+        .gte("published_at", threeDaysAgo)
+        .order("published_at", { ascending: false })
         .limit(500);
 
       if (error) throw error;
@@ -48,9 +50,9 @@ export default function QuickRead({ holdings, savedArticleIds = [], onToggleBook
     });
 
     const matches = news.filter(article => {
-      // 1. Check direct related column
-      if (article.related) {
-        const relatedList = article.related.split(",").map(r => r.trim().toUpperCase());
+      // 1. Check direct mentioned_symbols column
+      if (article.mentioned_symbols && Array.isArray(article.mentioned_symbols)) {
+        const relatedList = article.mentioned_symbols.map(r => r.trim().toUpperCase());
         if (cleanedHoldings.some(h => relatedList.includes(h.base))) {
           return true;
         }
@@ -69,8 +71,8 @@ export default function QuickRead({ holdings, savedArticleIds = [], onToggleBook
     const enrichedMatches = matches.map(article => {
       const matchedHoldings = cleanedHoldings
         .filter(h => {
-          if (article.related) {
-            const relatedList = article.related.split(",").map(r => r.trim().toUpperCase());
+          if (article.mentioned_symbols && Array.isArray(article.mentioned_symbols)) {
+            const relatedList = article.mentioned_symbols.map(r => r.trim().toUpperCase());
             if (relatedList.includes(h.base)) return true;
           }
           const searchTarget = `${article.headline} ${article.summary}`.toUpperCase();
@@ -126,8 +128,8 @@ export default function QuickRead({ holdings, savedArticleIds = [], onToggleBook
     <div className="quick-read-scroll-container">
       {filteredNews.map((article) => {
         const isBookmarked = savedArticleIds.includes(article.id);
-        const imageUrl = article.image 
-          ? article.image
+        const imageUrl = article.image_url 
+          ? article.image_url
           : null;
 
         return (

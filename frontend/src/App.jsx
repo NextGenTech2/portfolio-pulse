@@ -702,7 +702,7 @@ export default function App() {
     const fetchSavedArticlesDetails = async () => {
       try {
         const { data, error } = await supabase
-          .from("news_cache")
+          .from("news_articles")
           .select("*")
           .in("id", savedArticles);
         if (error) throw error;
