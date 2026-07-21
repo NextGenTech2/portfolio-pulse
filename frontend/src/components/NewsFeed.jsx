@@ -323,15 +323,49 @@ export default function NewsFeed({
         const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
         if (!supabaseUrl) return;
 
-        const res = await fetch(`${supabaseUrl}/functions/v1/get-indices?symbols=${encodeURIComponent(queryKey)}`, {
+        // Fetch Yahoo Finance spark quotes via image-proxy Edge Function
+        const yahooSparkUrl = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(queryKey)}`;
+        const proxyUrl = `${supabaseUrl}/functions/v1/image-proxy?url=${encodeURIComponent(yahooSparkUrl)}`;
+
+        const res = await fetch(proxyUrl, {
           headers: {
             Authorization: `Bearer ${anonKey}`,
           },
         });
 
         if (res.ok) {
-          const quotesData = await res.json();
-          setLiveQuotes(prev => ({ ...prev, ...quotesData }));
+          const data = await res.json();
+          const result = data?.spark?.result || [];
+          const quotesMap = {};
+
+          for (const item of result) {
+            if (!item || !item.symbol || !item.response || !item.response[0]) continue;
+            const meta = item.response[0].meta;
+            const price = meta.regularMarketPrice ?? null;
+            const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? null;
+            
+            let change = 0;
+            let changePercent = 0;
+            if (price !== null && prevClose !== null && prevClose !== 0) {
+              change = price - prevClose;
+              changePercent = ((price - prevClose) / prevClose) * 100;
+            }
+
+            const cleanSymbol = item.symbol.replace(/\.(NS|BO)$/i, "").toUpperCase();
+            const info = {
+              symbol: item.symbol,
+              cleanSymbol,
+              price,
+              change,
+              changePercent,
+              isPositive: changePercent >= 0
+            };
+
+            quotesMap[item.symbol.toUpperCase()] = info;
+            quotesMap[cleanSymbol] = info;
+          }
+
+          setLiveQuotes(prev => ({ ...prev, ...quotesMap }));
         }
       } catch (err) {
         console.warn("Error fetching live quotes for news feed:", err.message);
