@@ -317,62 +317,82 @@ export default function NewsFeed({
     if (fetchedQuotesRef.current === queryKey) return;
     fetchedQuotesRef.current = queryKey;
 
-    const fetchLiveQuotes = async () => {
+    const chunkArray = (arr, size) => {
+      const chunks = [];
+      for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+      }
+      return chunks;
+    };
+
+    const fetchLiveQuotesInChunks = async () => {
       try {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
         if (!supabaseUrl) return;
 
-        // Fetch Yahoo Finance spark quotes via image-proxy Edge Function
-        const yahooSparkUrl = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(queryKey)}`;
-        const proxyUrl = `${supabaseUrl}/functions/v1/image-proxy?url=${encodeURIComponent(yahooSparkUrl)}`;
+        const symbolChunks = chunkArray(querySymbols, 15);
+        const aggregatedQuotesMap = {};
 
-        const res = await fetch(proxyUrl, {
-          headers: {
-            Authorization: `Bearer ${anonKey}`,
-          },
-        });
+        await Promise.all(
+          symbolChunks.map(async (chunk) => {
+            try {
+              const chunkKey = chunk.join(",");
+              const yahooSparkUrl = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${chunkKey}`;
+              const proxyUrl = `${supabaseUrl}/functions/v1/image-proxy?url=${encodeURIComponent(yahooSparkUrl)}`;
 
-        if (res.ok) {
-          const data = await res.json();
-          const result = data?.spark?.result || [];
-          const quotesMap = {};
+              const res = await fetch(proxyUrl, {
+                headers: {
+                  Authorization: `Bearer ${anonKey}`,
+                },
+              });
 
-          for (const item of result) {
-            if (!item || !item.symbol || !item.response || !item.response[0]) continue;
-            const meta = item.response[0].meta;
-            const price = meta.regularMarketPrice ?? null;
-            const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? null;
-            
-            let change = 0;
-            let changePercent = 0;
-            if (price !== null && prevClose !== null && prevClose !== 0) {
-              change = price - prevClose;
-              changePercent = ((price - prevClose) / prevClose) * 100;
+              if (res.ok) {
+                const data = await res.json();
+                const result = data?.spark?.result || [];
+
+                for (const item of result) {
+                  if (!item || !item.symbol || !item.response || !item.response[0]) continue;
+                  const meta = item.response[0].meta;
+                  const price = meta.regularMarketPrice ?? null;
+                  const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? null;
+                  
+                  let change = 0;
+                  let changePercent = 0;
+                  if (price !== null && prevClose !== null && prevClose !== 0) {
+                    change = price - prevClose;
+                    changePercent = ((price - prevClose) / prevClose) * 100;
+                  }
+
+                  const cleanSymbol = item.symbol.replace(/\.(NS|BO)$/i, "").toUpperCase();
+                  const info = {
+                    symbol: item.symbol,
+                    cleanSymbol,
+                    price,
+                    change,
+                    changePercent,
+                    isPositive: changePercent >= 0
+                  };
+
+                  aggregatedQuotesMap[item.symbol.toUpperCase()] = info;
+                  aggregatedQuotesMap[cleanSymbol] = info;
+                }
+              }
+            } catch (err) {
+              console.warn("Chunk quote fetch error:", err);
             }
+          })
+        );
 
-            const cleanSymbol = item.symbol.replace(/\.(NS|BO)$/i, "").toUpperCase();
-            const info = {
-              symbol: item.symbol,
-              cleanSymbol,
-              price,
-              change,
-              changePercent,
-              isPositive: changePercent >= 0
-            };
-
-            quotesMap[item.symbol.toUpperCase()] = info;
-            quotesMap[cleanSymbol] = info;
-          }
-
-          setLiveQuotes(prev => ({ ...prev, ...quotesMap }));
+        if (Object.keys(aggregatedQuotesMap).length > 0) {
+          setLiveQuotes(prev => ({ ...prev, ...aggregatedQuotesMap }));
         }
       } catch (err) {
         console.warn("Error fetching live quotes for news feed:", err.message);
       }
     };
 
-    fetchLiveQuotes();
+    fetchLiveQuotesInChunks();
   }, [filteredNews]);
 
   // Pull-to-refresh Touch Handlers
