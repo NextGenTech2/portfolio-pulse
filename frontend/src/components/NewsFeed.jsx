@@ -291,6 +291,56 @@ export default function NewsFeed({
     setFilteredNews(clusterArticles(enrichedMatches));
   }, [news, holdings, filterMode]);
 
+  const [liveQuotes, setLiveQuotes] = useState({});
+  const fetchedQuotesRef = useRef("");
+
+  // Fetch real-time live stock quotes for article ticker badges
+  useEffect(() => {
+    if (!filteredNews || filteredNews.length === 0) return;
+
+    const rawHoldings = new Set();
+    filteredNews.forEach(cluster => {
+      const hList = cluster.mainArticle?.matchedHoldings;
+      if (hList && Array.isArray(hList)) {
+        hList.forEach(h => rawHoldings.add(h));
+      }
+    });
+
+    if (rawHoldings.size === 0) return;
+
+    const querySymbols = Array.from(rawHoldings).map(ticker => {
+      if (/\.(NS|BO)$/i.test(ticker)) return ticker.toUpperCase();
+      return `${ticker.toUpperCase()}.NS`;
+    });
+
+    const queryKey = querySymbols.sort().join(",");
+    if (fetchedQuotesRef.current === queryKey) return;
+    fetchedQuotesRef.current = queryKey;
+
+    const fetchLiveQuotes = async () => {
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        if (!supabaseUrl) return;
+
+        const res = await fetch(`${supabaseUrl}/functions/v1/get-indices?symbols=${encodeURIComponent(queryKey)}`, {
+          headers: {
+            Authorization: `Bearer ${anonKey}`,
+          },
+        });
+
+        if (res.ok) {
+          const quotesData = await res.json();
+          setLiveQuotes(prev => ({ ...prev, ...quotesData }));
+        }
+      } catch (err) {
+        console.warn("Error fetching live quotes for news feed:", err.message);
+      }
+    };
+
+    fetchLiveQuotes();
+  }, [filteredNews]);
+
   // Pull-to-refresh Touch Handlers
   const handleTouchStart = (e) => {
     const scrollContainer = e.currentTarget.closest(".main-content-scrollable");
@@ -564,13 +614,30 @@ export default function NewsFeed({
                       <div className="card-headline-column">
                         <h3 className="news-headline">{article.headline}</h3>
 
-                        {cleanTicker && (
-                          <div className="stock-tag-row">
-                            <span className="stock-tag-pill">
-                              {cleanTicker}
-                            </span>
-                          </div>
-                        )}
+                        {cleanTicker && (() => {
+                          const quote = liveQuotes[cleanTicker] || liveQuotes[`${cleanTicker}.NS`] || (primaryHolding ? liveQuotes[primaryHolding.toUpperCase()] : null);
+                          if (quote && typeof quote.changePercent === "number") {
+                            const isPos = quote.isPositive;
+                            const symbolPrefix = isPos ? "▲ +" : "▼ ";
+                            const formattedPct = `${symbolPrefix}${Math.abs(quote.changePercent).toFixed(2)}%`;
+                            
+                            return (
+                              <div className="stock-tag-row">
+                                <span className={`stock-tag-pill ${isPos ? "positive" : "negative"}`}>
+                                  {cleanTicker} {formattedPct}
+                                </span>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="stock-tag-row">
+                              <span className="stock-tag-pill neutral">
+                                {cleanTicker}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Right Thumbnail Image */}

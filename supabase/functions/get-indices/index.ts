@@ -32,6 +32,68 @@ serve(async (req) => {
   }
 
   try {
+    const reqUrl = new URL(req.url);
+    const customSymbolsParam = reqUrl.searchParams.get("symbols");
+
+    // Mode 1: Fetch live quotes for specific requested stock symbols
+    if (customSymbolsParam) {
+      const rawSymbols = customSymbolsParam.split(",").map(s => s.trim()).filter(Boolean);
+      if (rawSymbols.length === 0) {
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const url = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(rawSymbols.join(","))}`;
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Yahoo Finance returned status ${response.status}`);
+      }
+
+      const data = await response.json();
+      const result = data?.spark?.result || [];
+      const quotesMap: Record<string, any> = {};
+
+      for (const item of result) {
+        if (!item || !item.symbol || !item.response || !item.response[0]) continue;
+        const meta = item.response[0].meta;
+        const price = meta.regularMarketPrice ?? null;
+        const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? null;
+        
+        let change = 0;
+        let changePercent = 0;
+        if (price !== null && prevClose !== null && prevClose !== 0) {
+          change = price - prevClose;
+          changePercent = ((price - prevClose) / prevClose) * 100;
+        }
+
+        const cleanSymbol = item.symbol.replace(/\.(NS|BO)$/i, "").toUpperCase();
+        const info = {
+          symbol: item.symbol,
+          cleanSymbol,
+          price,
+          change,
+          changePercent,
+          isPositive: changePercent >= 0
+        };
+
+        quotesMap[item.symbol.toUpperCase()] = info;
+        quotesMap[cleanSymbol] = info;
+      }
+
+      return new Response(JSON.stringify(quotesMap), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Mode 2: Default major market indices
     const symbols = Object.keys(SYMBOLS_MAP).join(",");
     const url = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${symbols}`;
 
