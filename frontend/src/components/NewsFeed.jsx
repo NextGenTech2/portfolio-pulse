@@ -513,7 +513,12 @@ export default function NewsFeed({
             const article = cluster.mainArticle;
             const isFeatured = index === 0 && filterMode === "curated";
             const isBookmarked = savedArticleIds.includes(article.id);
-            const sentiment = getSentiment(article.headline, article.summary);
+            
+            const primaryHolding = article.matchedHoldings && article.matchedHoldings.length > 0 
+              ? article.matchedHoldings[0] 
+              : null;
+            const stockQuote = primaryHolding ? getStockPriceForTicker(primaryHolding) : null;
+            const cleanTicker = primaryHolding ? primaryHolding.replace(/\.(NS|BO)$/i, "").toUpperCase() : "";
 
             return (
               <div key={cluster.id} className="story-cluster-container">
@@ -524,8 +529,51 @@ export default function NewsFeed({
                   className={`news-card ${isFeatured ? "featured" : "regular"}`}
                 >
                   <div className="premium-card-inner">
-                    {/* Left Column: Image */}
-                    <div className="premium-card-left">
+                    {/* Top Meta Bar: Source • Time + Actions */}
+                    <div className="publisher-meta-row">
+                      {getSourceIcon(article.source)}
+                      <span className="source-name">{article.source}</span>
+                      <span className="divider-dot">•</span>
+                      <span className="article-time">{formatTime(article.published_at)}</span>
+                      
+                      <div className="premium-card-actions-inline">
+                        <button 
+                          className={`btn-card-action-mini bookmark ${isBookmarked ? "active" : ""}`}
+                          onClick={(e) => toggleBookmark(e, article.id)}
+                          title={isBookmarked ? "Remove Bookmark" : "Save Article"}
+                        >
+                          <Bookmark size={15} fill={isBookmarked ? "currentColor" : "none"} />
+                        </button>
+                        <button 
+                          className="btn-card-action-mini share"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(article.url);
+                            alert("Article link copied to clipboard!");
+                          }}
+                          title="Share Article"
+                        >
+                          <Share2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Main Card Content Row: Headline & Stock tag (Left), Thumbnail (Right) */}
+                    <div className="card-main-content">
+                      <div className="card-headline-column">
+                        <h3 className="news-headline">{article.headline}</h3>
+
+                        {cleanTicker && (
+                          <div className="stock-tag-row">
+                            <span className={`stock-tag-pill ${stockQuote && stockQuote.isPositive ? "positive" : "negative"}`}>
+                              {cleanTicker} {stockQuote ? stockQuote.change : ""}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right Thumbnail Image */}
                       <div className="premium-card-media">
                         {article.image_url ? (
                           <img 
@@ -534,16 +582,12 @@ export default function NewsFeed({
                             className="news-illustration" 
                             onLoad={(e) => {
                               if (e.target.naturalWidth <= 1 && e.target.naturalHeight <= 1) {
-                                // Handle 1x1 spacer/placeholder images from archived/deleted source images
                                 e.target.style.display = "none";
                                 const next = e.target.nextSibling;
                                 if (next) next.style.display = "block";
-                              } else {
-                                console.log('Image loaded', article.id, article.image_url);
                               }
                             }}
                             onError={(e) => {
-                              console.error('Image load error', article.image_url, e);
                               e.target.style.display = "none";
                               const next = e.target.nextSibling;
                               if (next) next.style.display = "block";
@@ -552,47 +596,6 @@ export default function NewsFeed({
                         ) : null}
                         <div style={{ display: article.image_url ? "none" : "block", width: "100%", height: "100%" }}>
                           {renderFallbackIllustration(article.headline, article.summary)}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Right Column: Headline, Summary, Bottom details */}
-                    <div className="premium-card-middle">
-                      <h3 className="news-headline">{article.headline}</h3>
-
-                      {article.summary && (
-                        <p className="news-summary">{article.summary}</p>
-                      )}
-                      <div className="publisher-meta-row">
-                        {getSourceIcon(article.source)}
-                        <span className="source-name">{article.source}</span>
-                        <span className="divider-dot">•</span>
-                        <span className="article-time">{formatTime(article.published_at)}</span>
-                        {article.matchedHoldings && article.matchedHoldings.length > 0 && (
-                          <span className="stock-tag-inline">
-                            {article.matchedHoldings[0].replace(/\.(NS|BO)$/i, "").toUpperCase()}
-                          </span>
-                        )}
-                        <div className="premium-card-actions-inline">
-                          <button 
-                            className={`btn-card-action-mini bookmark ${isBookmarked ? "active" : ""}`}
-                            onClick={(e) => toggleBookmark(e, article.id)}
-                            title={isBookmarked ? "Remove Bookmark" : "Save Article"}
-                          >
-                            <Bookmark size={13} fill={isBookmarked ? "currentColor" : "none"} />
-                          </button>
-                          <button 
-                            className="btn-card-action-mini share"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              navigator.clipboard.writeText(article.url);
-                              alert("Article link copied to clipboard!");
-                            }}
-                            title="Share Article"
-                          >
-                            <Share2 size={13} />
-                          </button>
                         </div>
                       </div>
                     </div>
