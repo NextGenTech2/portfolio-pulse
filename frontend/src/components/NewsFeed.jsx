@@ -566,8 +566,8 @@ export default function NewsFeed({
 
                         {cleanTicker && (
                           <div className="stock-tag-row">
-                            <span className={`stock-tag-pill ${stockQuote && stockQuote.isPositive ? "positive" : "negative"}`}>
-                              {cleanTicker} {stockQuote ? stockQuote.change : ""}
+                            <span className="stock-tag-pill">
+                              {cleanTicker}
                             </span>
                           </div>
                         )}
